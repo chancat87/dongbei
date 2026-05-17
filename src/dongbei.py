@@ -277,7 +277,7 @@ class SourceLoc:
 
     def __eq__(self, other):
         return (
-            type(other) == SourceLoc
+            isinstance(other, SourceLoc)
             and self.filepath == other.filepath
             and self.line == other.line
             and self.column == other.column
@@ -349,6 +349,7 @@ class Expr:
         return self.__str__()
 
     def __eq__(self, other):
+        # Strict type check: a subclass expr is not equal to its parent even if fields match.
         return type(self) == type(other) and self.Equals(other)
 
     def Equals(self, other):
