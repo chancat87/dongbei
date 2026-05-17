@@ -17,6 +17,9 @@ import re
 import sys  # needed by 最高指示
 import time  # needed by 打个盹
 
+import lark
+from lark.lexer import Lexer as _LarkLexer
+
 from absl import app
 from absl import flags
 
@@ -203,6 +206,82 @@ KEYWORD_TO_NORMALIZED_KEYWORD = {
     KW_COMMA_NARROW: KW_COMMA,
     KW_OPEN_BRACKET_VERBOSE: KW_OPEN_BRACKET,
     KW_SAY: KW_SAY_DIGU,
+}
+
+# Maps a normalized keyword value to its Lark terminal name (underscore-prefixed = discarded).
+_KW_VALUE_TO_TERMINAL = {
+    KW_APPEND: "_KW_APPEND",
+    KW_ASSERT: "_KW_ASSERT",
+    KW_ASSERT_FALSE: "_KW_ASSERT_FALSE",
+    KW_BASE_INIT: "_KW_BASE_INIT",
+    KW_BECOME: "_KW_BECOME",
+    KW_BEGIN: "_KW_BEGIN",
+    KW_BREAK: "_KW_BREAK",
+    KW_CALL: "_KW_CALL",
+    KW_CHECK: "_KW_CHECK",
+    KW_CLASS: "_KW_CLASS",
+    KW_CLOSE_BRACKET: "_KW_CLOSE_BRACKET",
+    KW_CLOSE_PAREN: "_KW_CLOSE_PAREN",
+    KW_CLOSE_QUOTE: "_KW_CLOSE_QUOTE",
+    KW_COLON: "_KW_COLON",
+    KW_COMMA: "_KW_COMMA",
+    KW_COMPARE: "_KW_COMPARE",
+    KW_COMPARE_WITH: "_KW_COMPARE_WITH",
+    KW_CONCAT: "_KW_CONCAT",
+    KW_CONTINUE: "_KW_CONTINUE",
+    KW_DEC: "KW_DEC",
+    KW_DEC_BY: "_KW_DEC_BY",
+    KW_DEL: "_KW_DEL",
+    KW_DERIVED: "_KW_DERIVED",
+    KW_DIVIDE_BY: "KW_DIVIDE_BY",
+    KW_ELSE: "_KW_ELSE",
+    KW_END: "_KW_END",
+    KW_END_LOOP: "_KW_END_LOOP",
+    KW_EQUAL: "KW_EQUAL",
+    KW_EXTEND: "_KW_EXTEND",
+    KW_FROM: "_KW_FROM",
+    KW_DEF: "_KW_DEF",
+    KW_GREATER: "KW_GREATER",
+    KW_IMPORT: "_KW_IMPORT",
+    KW_IN: "_KW_IN",
+    KW_INC: "KW_INC",
+    KW_INC_BY: "_KW_INC_BY",
+    KW_INDEX: "_KW_INDEX",
+    KW_INDEX_1: "KW_INDEX_1",
+    KW_INDEX_LAST: "KW_INDEX_LAST",
+    KW_1_INFINITE_LOOP: "_KW_1_INFINITE_LOOP",
+    KW_1_INFINITE_LOOP_EGG: "_KW_1_INFINITE_LOOP_EGG",
+    KW_INTEGER_DIVIDE_BY: "KW_INTEGER_DIVIDE_BY",
+    KW_IS_LIST: "_KW_IS_LIST",
+    KW_IS_NONE: "KW_IS_NONE",
+    KW_IS_VAR: "_KW_IS_VAR",
+    KW_LENGTH: "_KW_LENGTH",
+    KW_LESS: "KW_LESS",
+    KW_LOOP: "_KW_LOOP",
+    KW_MINUS: "KW_MINUS",
+    KW_MODULO: "KW_MODULO",
+    KW_NEGATE: "_KW_NEGATE",
+    KW_NEW_OBJECT_OF: "_KW_NEW_OBJECT_OF",
+    KW_NOT_EQUAL: "KW_NOT_EQUAL",
+    KW_OPEN_BRACKET: "_KW_OPEN_BRACKET",
+    KW_OPEN_PAREN: "_KW_OPEN_PAREN",
+    KW_OPEN_QUOTE: "_KW_OPEN_QUOTE",
+    KW_PERIOD: "_KW_PERIOD",
+    KW_PLUS: "KW_PLUS",
+    KW_RAISE: "_KW_RAISE",
+    KW_REMOVE_HEAD: "_KW_REMOVE_HEAD",
+    KW_REMOVE_TAIL: "_KW_REMOVE_TAIL",
+    KW_RETURN: "_KW_RETURN",
+    KW_SAY_DIGU: "_KW_SAY_DIGU",
+    KW_SET_NONE: "_KW_SET_NONE",
+    KW_STEP: "_KW_STEP",
+    KW_STEP_LOOP: "_KW_STEP_LOOP",
+    KW_THEN: "_KW_THEN",
+    KW_TIMES: "KW_TIMES",
+    KW_TUPLE: "_KW_TUPLE",
+    KW_TO: "_KW_TO",
+    KW_YIELD: "_KW_YIELD",
+    KW_DOT: "_KW_DOT",
 }
 
 # Types of tokens.
@@ -878,8 +957,6 @@ class DongbeiParser(object):
     # TODO: split the code into lines to make skipping lines faster.
     def __init__(self):
         self.code_loc = SourceCodeAndLoc(None, None)
-        self._tokens = []  # all tokens from tokenization
-        self._pos = 0  # current position in self._tokens
 
     @property
     def code(self):
@@ -969,7 +1046,7 @@ class DongbeiParser(object):
             # Try to parse a keyword at the beginning of the code.
             matched_keyword = False
             for keyword in KEYWORDS:
-                kw_loc = self.loc
+                kw_loc = self.loc.Clone()
                 kw = self.TryParseKeyword(keyword)
                 remaining_code = self.code_loc.Clone()
                 if kw:
@@ -993,7 +1070,7 @@ class DongbeiParser(object):
 
     def Tokenize(self, code, src_file):
         self.code_loc.code = code
-        self.code_loc.loc = SourceLoc(filepath=src_file)
+        self.code_loc.loc = SourceLoc(filepath=src_file if src_file is not None else "<unknown>")
         return self._Tokenize()
 
     def _Tokenize(self):
@@ -1022,711 +1099,584 @@ class DongbeiParser(object):
         return tokens
 
     def TranslateTokensToStatements(self, tokens):
-        self._tokens = tokens
-        self._pos = 0
-        statements = self.ParseStmts()
-        assert self._pos >= len(self._tokens), "多余符号：%s" % (self._tokens[self._pos:],)
-        return statements
+        tree = _lark_parser.parse(tokens, start="start")
+        return _lark_transformer.transform(tree)
 
-    def ParseStmts(self):
-        """Returns a statement list, mutating self.tokens."""
 
-        stmts = []
-        while True:
-            stmt = self.TryParseStmt()
-            if not stmt:
-                return stmts
-            stmts.append(stmt)
 
-    def TryParseStmt(self):
-        """Returns statement, mutating self.tokens)."""
+# ── Lark-based parser (replaces hand-written recursive-descent) ──────────────
 
-        orig_pos = self._pos
+_DONGBEI_GRAMMAR = r"""
+// Terminal naming convention:
+//   _KW_*          underscore-prefixed → auto-discarded from Transformer items (structural punctuation).
+//   KW_*           no underscore → kept in Transformer items so the method can extract .loc from the token.
+//                  Only operator/relation keywords that need a real SourceLoc use this form.
+//   IDENTIFIER / NUMBER_LITERAL / STRING_LITERAL  carry the original dongbei Token as .value.
 
-        # Parse 翠花，上
-        imp = self.TryConsumeKeyword(KW_IMPORT)
-        if imp:
-            module = self.ConsumeTokenType(TK_IDENTIFIER)
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_IMPORT, module)
+start:      stmt*
+start_expr: expr
+start_stmt: stmt
 
-        # Parse 开整：
-        begin = self.TryConsumeKeyword(KW_BEGIN)
-        if begin:
-            stmts = self.ParseStmts()
-            if not stmts:
-                stmts = []
-            self.ConsumeKeyword(KW_END)
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_COMPOUND, stmts)
+// =================== Statements ===================
+// Dangling-else resolved via matched/open split (standard unambiguous grammar).
+// open_stmt: the outermost if has no matching else.
+// matched_stmt: all ifs have paired elses (or no ifs present).
 
-        # Parse 保准
-        assert_ = self.TryConsumeKeyword(KW_ASSERT)
-        if assert_:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_ASSERT, expr)
+?stmt: open_stmt | matched_stmt
 
-        # Parse 辟谣
-        assert_ = self.TryConsumeKeyword(KW_ASSERT_FALSE)
-        if assert_:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_ASSERT_FALSE, expr)
+?open_stmt: _KW_CHECK expr _KW_THEN stmt                                             -> if_stmt
+          | _KW_CHECK expr _KW_THEN matched_stmt _KW_ELSE open_stmt                  -> if_else_stmt
 
-        # Parse 整叉劈了
-        raise_ = self.TryConsumeKeyword(KW_RAISE)
-        if raise_:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_RAISE, expr)
+?matched_stmt: _KW_CHECK expr _KW_THEN matched_stmt _KW_ELSE matched_stmt            -> if_else_stmt
+             | non_if_stmt
 
-        # Parse 削：
-        set_none = self.TryConsumeKeyword(KW_SET_NONE)
-        if set_none:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_SET_NONE, expr)
+?non_if_stmt: _KW_IMPORT IDENTIFIER _KW_PERIOD                                       -> import_stmt
+    | _KW_BEGIN stmt* _KW_END _KW_PERIOD                                              -> compound_stmt
+    | _KW_ASSERT expr _KW_PERIOD                                                      -> assert_stmt
+    | _KW_ASSERT_FALSE expr _KW_PERIOD                                                -> assert_false_stmt
+    | _KW_RAISE expr _KW_PERIOD                                                       -> raise_stmt
+    | _KW_SET_NONE expr _KW_PERIOD                                                    -> set_none_stmt
+    | _KW_DEL expr _KW_PERIOD                                                         -> del_stmt
+    | _KW_SAY_DIGU _KW_COLON expr _KW_PERIOD                                         -> say_stmt
+    | _KW_RETURN expr _KW_PERIOD                                                      -> return_stmt
+    | _KW_CONTINUE _KW_PERIOD                                                         -> continue_stmt
+    | _KW_BREAK _KW_PERIOD                                                            -> break_stmt
+    | func_def
+    | IDENTIFIER _KW_IS_VAR _KW_PERIOD                                               -> var_decl_stmt
+    | IDENTIFIER _KW_IS_LIST _KW_PERIOD                                              -> list_decl_stmt
+    | IDENTIFIER _KW_CLASS _KW_DERIVED IDENTIFIER _KW_CLASS _KW_DEF method_def* _KW_END _KW_PERIOD -> class_def_stmt
+    | expr _KW_FROM expr _KW_TO expr _KW_LOOP stmt* _KW_END_LOOP _KW_PERIOD         -> loop_stmt
+    | expr _KW_FROM expr _KW_TO expr step_spec stmt* _KW_END_LOOP _KW_PERIOD        -> step_loop_stmt
+    | expr _KW_IN expr _KW_LOOP stmt* _KW_END_LOOP _KW_PERIOD                       -> range_loop_stmt
+    | expr _KW_1_INFINITE_LOOP stmt* _KW_END_LOOP _KW_PERIOD                        -> infinite_loop_stmt
+    | expr _KW_1_INFINITE_LOOP_EGG stmt* _KW_END_LOOP _KW_PERIOD                    -> infinite_loop_stmt
+    | expr _KW_BECOME expr _KW_PERIOD                                                -> assign_stmt
+    | expr _KW_APPEND expr _KW_PERIOD                                                -> append_stmt
+    | expr _KW_EXTEND expr _KW_PERIOD                                                -> extend_stmt
+    | expr _KW_YIELD _KW_PERIOD                                                      -> yield_stmt
+    | expr KW_INC _KW_PERIOD                                                         -> inc_stmt
+    | expr _KW_INC_BY expr _KW_STEP _KW_PERIOD                                      -> inc_by_stmt
+    | expr KW_DEC _KW_PERIOD                                                         -> dec_stmt
+    | expr _KW_DEC_BY expr _KW_STEP _KW_PERIOD                                      -> dec_by_stmt
+    | expr _KW_PERIOD                                                                -> expr_stmt
 
-        # Parse 炮决：
-        del_ = self.TryConsumeKeyword(KW_DEL)
-        if del_:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_DEL, expr)
+// 一步N蹿磨叽：syntax: NUMBER_LITERAL(=1) 步 N 蹿磨叽：
+step_spec: NUMBER_LITERAL _KW_STEP expr _KW_STEP_LOOP                               -> step_spec_rule
 
-        # Parse 唠唠/嘀咕：
-        say = self.TryConsumeKeyword(KW_SAY_DIGU)
-        if say:
-            self.ConsumeKeyword(KW_COLON)
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_SAY, expr)
+?func_def: IDENTIFIER _KW_OPEN_PAREN param_list _KW_CLOSE_PAREN _KW_DEF stmt* _KW_END _KW_PERIOD -> func_def_with_params
+         | IDENTIFIER _KW_DEF stmt* _KW_END _KW_PERIOD                              -> func_def_no_params
 
-        # Parse 整
-        call_expr = self.TryParseCallExpr()
-        if call_expr:
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_CALL, call_expr)
+method_def: IDENTIFIER _KW_OPEN_PAREN param_list _KW_CLOSE_PAREN _KW_DEF stmt* _KW_END _KW_PERIOD -> method_def_with_params
+          | IDENTIFIER _KW_DEF stmt* _KW_END _KW_PERIOD                             -> method_def_no_params
 
-        # Parse 滚犊子吧
-        ret = self.TryConsumeKeyword(KW_RETURN)
-        if ret:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_RETURN, expr)
+param_list: IDENTIFIER (_KW_COMMA IDENTIFIER)*
 
-        # Parse 接着磨叽
-        cont = self.TryConsumeKeyword(KW_CONTINUE)
-        if cont:
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_CONTINUE, None)
+// =================== Expressions ===================
 
-        # Parse 尥蹶子
-        break_ = self.TryConsumeKeyword(KW_BREAK)
-        if break_:
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_BREAK, None)
+// Concatenation (lowest precedence, left-associative via list)
+?expr: concat_expr
 
-        # Parse 寻思
-        check = self.TryConsumeKeyword(KW_CHECK)
-        if check:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_THEN)
-            then_stmt = self.ParseStmt()
-            # Parse the optional else-branch.
-            kw_else = self.TryConsumeKeyword(KW_ELSE)
-            if kw_else:
-                else_stmt = self.ParseStmt()
+concat_expr: non_concat_expr (_KW_CONCAT non_concat_expr)*
+
+// non_concat_expr: comparison, tuple, or plain arithmetic.
+// 跟 is dual-role (comparison op AND tuple separator); Earley resolves the ambiguity.
+?non_concat_expr: compare_expr
+               | tuple_expr
+               | arith_expr
+
+// Comparison expressions (all forms)
+compare_expr: arith_expr _KW_COMPARE arith_expr KW_GREATER                          -> comp_greater
+    | arith_expr _KW_COMPARE arith_expr KW_LESS                                      -> comp_less
+    | arith_expr KW_IS_NONE                                                          -> comp_is_none
+    | arith_expr _KW_COMPARE_WITH arith_expr KW_EQUAL                                -> comp_eq
+    | arith_expr _KW_COMPARE_WITH arith_expr KW_NOT_EQUAL                            -> comp_neq
+
+// Tuple element: comparison or plain arithmetic (but not another tuple)
+?tuple_element: compare_expr | arith_expr
+
+// Tuple expressions (right-recursive; elements may be comparison expressions)
+tuple_expr: tuple_element _KW_TUPLE                                                  -> singleton_tuple_expr
+          | tuple_element _KW_COMPARE_WITH tuple_expr                                -> cons_tuple_expr
+
+// Additive (left-recursive)
+?arith_expr: arith_expr KW_PLUS term_expr                                            -> add_expr
+           | arith_expr KW_MINUS term_expr                                           -> sub_expr
+           | term_expr
+
+// Multiplicative (left-recursive)
+?term_expr: term_expr KW_TIMES atom_expr                                             -> mul_expr
+          | term_expr KW_DIVIDE_BY atom_expr                                         -> div_expr
+          | term_expr KW_INTEGER_DIVIDE_BY atom_expr                                 -> idiv_expr
+          | term_expr KW_MODULO atom_expr                                            -> mod_expr
+          | atom_expr
+
+// Postfix / prefix (left-recursive for postfix, right-recursive for negate)
+?atom_expr: _KW_NEGATE atom_expr                                                     -> negate_expr
+          | atom_expr KW_INDEX_1                                                     -> index1_expr
+          | atom_expr KW_INDEX_LAST                                                  -> index_last_expr
+          | atom_expr _KW_INDEX object_expr                                          -> index_expr
+          | atom_expr _KW_DOT IDENTIFIER                                             -> dot_expr
+          | atom_expr call_expr                                                      -> method_call_expr
+          | atom_expr _KW_LENGTH                                                     -> length_expr
+          | atom_expr _KW_REMOVE_HEAD                                                -> remove_head_expr
+          | atom_expr _KW_REMOVE_TAIL                                                -> remove_tail_expr
+          | object_expr
+
+?object_expr: _KW_TUPLE                                                              -> empty_tuple_expr
+           | NUMBER_LITERAL                                                          -> num_literal_expr
+           | KW_IS_NONE                                                              -> none_literal_expr
+           | _KW_OPEN_QUOTE STRING_LITERAL _KW_CLOSE_QUOTE                          -> str_literal_expr
+           | IDENTIFIER _KW_NEW_OBJECT_OF _KW_OPEN_PAREN expr_list _KW_CLOSE_PAREN -> new_object_with_args_expr
+           | IDENTIFIER _KW_NEW_OBJECT_OF                                           -> new_object_expr
+           | IDENTIFIER                                                              -> variable_expr
+           | _KW_OPEN_PAREN expr _KW_CLOSE_PAREN                                    -> paren_expr
+           | call_expr
+           | _KW_OPEN_BRACKET _KW_CLOSE_BRACKET                                    -> empty_list_expr
+           | _KW_OPEN_BRACKET expr_list _KW_CLOSE_BRACKET                           -> list_literal_expr
+
+?call_expr: _KW_CALL _KW_BASE_INIT _KW_OPEN_PAREN expr_list _KW_CLOSE_PAREN        -> call_base_init
+         | _KW_CALL _KW_BASE_INIT _KW_OPEN_PAREN _KW_CLOSE_PAREN                    -> call_base_init
+         | _KW_CALL _KW_BASE_INIT                                                    -> call_base_init
+         | _KW_CALL IDENTIFIER _KW_OPEN_PAREN expr_list _KW_CLOSE_PAREN             -> call_func
+         | _KW_CALL IDENTIFIER _KW_OPEN_PAREN _KW_CLOSE_PAREN                       -> call_func
+         | _KW_CALL IDENTIFIER                                                       -> call_func
+
+expr_list: expr (_KW_COMMA expr)* _KW_COMMA?
+
+// =================== Terminal declarations ===================
+// Patterns are placeholders; actual matching is done by _DongbeiLexer.
+IDENTIFIER:              /x/
+NUMBER_LITERAL:          /x/
+STRING_LITERAL:          /x/
+_KW_APPEND:              /x/
+_KW_ASSERT:              /x/
+_KW_ASSERT_FALSE:        /x/
+_KW_BASE_INIT:           /x/
+_KW_BECOME:              /x/
+_KW_BEGIN:               /x/
+_KW_BREAK:               /x/
+_KW_CALL:                /x/
+_KW_CHECK:               /x/
+_KW_CLASS:               /x/
+_KW_CLOSE_BRACKET:       /x/
+_KW_CLOSE_PAREN:         /x/
+_KW_CLOSE_QUOTE:         /x/
+_KW_COLON:               /x/
+_KW_COMMA:               /x/
+_KW_COMPARE:             /x/
+_KW_COMPARE_WITH:        /x/
+_KW_CONCAT:              /x/
+_KW_CONTINUE:            /x/
+KW_DEC:                  /x/
+_KW_DEC_BY:              /x/
+_KW_DEL:                 /x/
+_KW_DERIVED:             /x/
+KW_DIVIDE_BY:            /x/
+_KW_ELSE:                /x/
+_KW_END:                 /x/
+_KW_END_LOOP:            /x/
+KW_EQUAL:                /x/
+_KW_EXTEND:              /x/
+_KW_FROM:                /x/
+_KW_DEF:                 /x/
+KW_GREATER:              /x/
+_KW_IMPORT:              /x/
+_KW_IN:                  /x/
+KW_INC:                  /x/
+_KW_INC_BY:              /x/
+_KW_INDEX:               /x/
+KW_INDEX_1:              /x/
+KW_INDEX_LAST:           /x/
+_KW_1_INFINITE_LOOP:     /x/
+_KW_1_INFINITE_LOOP_EGG: /x/
+KW_INTEGER_DIVIDE_BY:    /x/
+_KW_IS_LIST:             /x/
+KW_IS_NONE:              /x/
+_KW_IS_VAR:              /x/
+_KW_LENGTH:              /x/
+KW_LESS:                 /x/
+_KW_LOOP:                /x/
+KW_MINUS:                /x/
+KW_MODULO:               /x/
+_KW_NEGATE:              /x/
+_KW_NEW_OBJECT_OF:       /x/
+KW_NOT_EQUAL:            /x/
+_KW_OPEN_BRACKET:        /x/
+_KW_OPEN_PAREN:          /x/
+_KW_OPEN_QUOTE:          /x/
+_KW_PERIOD:              /x/
+KW_PLUS:                 /x/
+_KW_RAISE:               /x/
+_KW_REMOVE_HEAD:         /x/
+_KW_REMOVE_TAIL:         /x/
+_KW_RETURN:              /x/
+_KW_SAY_DIGU:            /x/
+_KW_SET_NONE:            /x/
+_KW_STEP:                /x/
+_KW_STEP_LOOP:           /x/
+_KW_THEN:                /x/
+KW_TIMES:                /x/
+_KW_TUPLE:               /x/
+_KW_TO:                  /x/
+_KW_YIELD:               /x/
+_KW_DOT:                 /x/
+"""
+
+
+class _DongbeiLexer(_LarkLexer):
+    """Custom Lark lexer that feeds pre-tokenized dongbei Tokens into the Earley parser."""
+
+    __future_interface__ = 0
+
+    def __init__(self, lexer_conf):
+        pass
+
+    def lex(self, token_list):
+        """Yield lark.Token objects wrapping each dongbei Token.
+
+        The original dongbei Token is preserved as lark.Token.value so
+        the Transformer can recover it.
+        """
+        for dk_tok in token_list:
+            if dk_tok.kind == TK_KEYWORD:
+                terminal = _KW_VALUE_TO_TERMINAL.get(dk_tok.value)
+                if terminal is None:
+                    raise ValueError(f"Unknown keyword token: {dk_tok}")
+                yield lark.Token(terminal, dk_tok)
+            elif dk_tok.kind == TK_IDENTIFIER:
+                yield lark.Token("IDENTIFIER", dk_tok)
+            elif dk_tok.kind == TK_NUMBER_LITERAL:
+                yield lark.Token("NUMBER_LITERAL", dk_tok)
+            elif dk_tok.kind == TK_STRING_LITERAL:
+                yield lark.Token("STRING_LITERAL", dk_tok)
             else:
-                else_stmt = None
-            return Statement(STMT_CONDITIONAL, (expr, then_stmt, else_stmt))
+                raise ValueError(f"Unexpected token kind in parser input: {dk_tok}")
 
-        func_def = self.TryParseFuncDef()
-        if func_def:
-            return func_def
 
-        # Parse an identifier name.
-        id = self.TryConsumeTokenType(TK_IDENTIFIER)
-        if id:
-            # Code below is for statements that start with an identifier.
+def _loc():
+    """Returns a dummy SourceLoc for synthesised tokens."""
+    return SourceLoc()
 
-            # Parse 是活雷锋
-            is_var = self.TryConsumeKeyword(KW_IS_VAR)
-            if is_var:
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_VAR_DECL, id)
 
-            # Parse 都是活雷锋
-            is_list = self.TryConsumeKeyword(KW_IS_LIST)
-            if is_list:
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_LIST_VAR_DECL, id)
+class _DongbeiTransformer(lark.Transformer):
+    """Converts a Lark parse tree into dongbei Statement / Expr AST nodes."""
 
-            # Parse 阶级
-            class_ = self.TryConsumeKeyword(KW_CLASS)
-            if class_:
-                self.ConsumeKeyword(KW_DERIVED)
-                subclass = self.ConsumeTokenType(TK_IDENTIFIER)
-                self.ConsumeKeyword(KW_CLASS)
-                self.ConsumeKeyword(KW_DEF)
-                methods = self.ParseMethodDefs()
-                self.ConsumeKeyword(KW_END)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_CLASS_DEF, (subclass, id, methods))
+    # ── helper ──────────────────────────────────────────────────────────────
 
-        self._pos = orig_pos
-        expr1 = self.TryParseExpr()
-        if expr1:
-            # Code below is for statements that start with an expression.
+    @staticmethod
+    def _dk(lark_tok):
+        """Unwrap a lark.Token to get the underlying dongbei Token."""
+        return lark_tok.value
 
-            # Parse 从...到...磨叽
-            from_ = self.TryConsumeKeyword(KW_FROM)
-            if from_:
-                from_expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_TO)
-                to_expr = self.ParseExpr()
-                loop = self.TryConsumeKeyword(KW_LOOP)
-                if loop:
-                    step_expr = NumberLiteralExpr(1, None)
-                else:
-                    # Parse 一步 N 蹿磨叽
-                    self.ConsumeToken(Token(TK_NUMBER_LITERAL, 1, None))
-                    self.ConsumeKeyword(KW_STEP)
-                    step_expr = self.ParseExpr()
-                    self.ConsumeKeyword(KW_STEP_LOOP)
-                stmts = self.ParseStmts()
-                self.ConsumeKeyword(KW_END_LOOP)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(
-                    STMT_LOOP, (expr1, from_expr, to_expr, step_expr, stmts)
-                )
+    # ── start rules ─────────────────────────────────────────────────────────
 
-            # Parse 在...磨叽
-            in_ = self.TryConsumeKeyword(KW_IN)
-            if in_:
-                range_expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_LOOP)
-                stmts = self.ParseStmts()
-                self.ConsumeKeyword(KW_END_LOOP)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_RANGE_LOOP, (expr1, range_expr, stmts))
+    def start(self, items):
+        return list(items)
 
-            # Parse 从一而终磨叽 or the '1 Infinite Loop' 彩蛋
-            infinite_loop = self.TryConsumeKeyword(KW_1_INFINITE_LOOP)
-            if not infinite_loop:
-                infinite_loop = self.TryConsumeKeyword(KW_1_INFINITE_LOOP_EGG)
-            if infinite_loop:
-                stmts = self.ParseStmts()
-                self.ConsumeKeyword(KW_END_LOOP)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_INFINITE_LOOP, (expr1, stmts))
+    def start_expr(self, items):
+        return items[0]
 
-            # Parse 装
-            become = self.TryConsumeKeyword(KW_BECOME)
-            if become:
-                expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_ASSIGN, (expr1, expr))
+    def start_stmt(self, items):
+        return items[0]
 
-            # Parse 来了个
-            append = self.TryConsumeKeyword(KW_APPEND)
-            if append:
-                expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_APPEND, (expr1, expr))
+    # ── statements ──────────────────────────────────────────────────────────
 
-            # Parse 来了群
-            extend = self.TryConsumeKeyword(KW_EXTEND)
-            if extend:
-                expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_EXTEND, (expr1, expr))
+    def import_stmt(self, items):
+        return Statement(STMT_IMPORT, self._dk(items[0]))
 
-            # Parse 出溜
-            yield_kw = self.TryConsumeKeyword(KW_YIELD)
-            if yield_kw:
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_YIELD, expr1)
+    def compound_stmt(self, items):
+        return Statement(STMT_COMPOUND, list(items))
 
-            # Parse 走走
-            inc_loc = self.loc
-            inc = self.TryConsumeKeyword(KW_INC)
-            if inc:
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_INC_BY, (expr1, NumberLiteralExpr(1, inc_loc)))
+    def assert_stmt(self, items):
+        return Statement(STMT_ASSERT, items[0])
 
-            # Parse 走X步
-            inc = self.TryConsumeKeyword(KW_INC_BY)
-            if inc:
-                expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_STEP)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_INC_BY, (expr1, expr))
+    def assert_false_stmt(self, items):
+        return Statement(STMT_ASSERT_FALSE, items[0])
 
-            # Parse 稍稍
-            dec_loc = self.loc
-            dec = self.TryConsumeKeyword(KW_DEC)
-            if dec:
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_DEC_BY, (expr1, NumberLiteralExpr(1, dec_loc)))
+    def raise_stmt(self, items):
+        return Statement(STMT_RAISE, items[0])
 
-            # Parse 稍X步
-            dec = self.TryConsumeKeyword(KW_DEC_BY)
-            if dec:
-                expr = self.ParseExpr()
-                self.ConsumeKeyword(KW_STEP)
-                self.ConsumeKeyword(KW_PERIOD)
-                return Statement(STMT_DEC_BY, (expr1, expr))
+    def set_none_stmt(self, items):
+        return Statement(STMT_SET_NONE, items[0])
 
-            # Treat the expression as a statement.
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_EXPR, expr1)
+    def del_stmt(self, items):
+        return Statement(STMT_DEL, items[0])
 
-        self._pos = orig_pos
-        return None
+    def say_stmt(self, items):
+        return Statement(STMT_SAY, items[0])
 
-    def TryConsumeKeyword(self, keyword):
-        token = self.TryConsumeToken(Keyword(keyword, None))
-        return token
+    def return_stmt(self, items):
+        return Statement(STMT_RETURN, items[0])
 
-    def TryParseObjectExpr(self):
-        """Returns (expr, remaining tokens)."""
+    def continue_stmt(self, items):
+        return Statement(STMT_CONTINUE, None)
 
-        # Do we see 抱团？
-        tuple = self.TryConsumeKeyword(KW_TUPLE)
-        if tuple:
-            return TupleExpr(())
+    def break_stmt(self, items):
+        return Statement(STMT_BREAK, None)
 
-        # Do we see a number literal?
-        num = self.TryConsumeTokenType(TK_NUMBER_LITERAL)
-        if num:
-            return LiteralExpr(num)
+    def if_stmt(self, items):
+        expr, then_stmt = items
+        return Statement(STMT_CONDITIONAL, (expr, then_stmt, None))
 
-        # Do we see a None literal?
-        is_none_loc = self.loc.Clone()
-        is_none = self.TryConsumeKeyword(KW_IS_NONE)
-        if is_none:
-            return LiteralExpr(Token(TK_NONE_LITERAL, None, is_none_loc))
+    def if_else_stmt(self, items):
+        expr, then_stmt, else_stmt = items
+        return Statement(STMT_CONDITIONAL, (expr, then_stmt, else_stmt))
 
-        # Do we see a string literal?
-        open_quote = self.TryConsumeKeyword(KW_OPEN_QUOTE)
-        if open_quote:
-            str = self.ConsumeTokenType(TK_STRING_LITERAL)
-            self.ConsumeKeyword(KW_CLOSE_QUOTE)
-            return LiteralExpr(str)
+    def var_decl_stmt(self, items):
+        return Statement(STMT_VAR_DECL, self._dk(items[0]))
 
-        # Do we see an identifier?
-        id = self.TryConsumeTokenType(TK_IDENTIFIER)
-        if id:
-            new_obj = self.TryConsumeKeyword(KW_NEW_OBJECT_OF)
-            if not new_obj:
-                return VariableExpr(id.value)
-            args = []
-            open_paren = self.TryConsumeKeyword(KW_OPEN_PAREN)
-            if open_paren:
-                args = self.ParseExprList()
-                self.ConsumeKeyword(KW_CLOSE_PAREN)
-            return NewObjectExpr(id, args)
+    def list_decl_stmt(self, items):
+        return Statement(STMT_LIST_VAR_DECL, self._dk(items[0]))
 
-        # Do we see a parenthesis?
-        open_paren = self.TryConsumeKeyword(KW_OPEN_PAREN)
-        if open_paren:
-            expr = self.ParseExpr()
-            self.ConsumeKeyword(KW_CLOSE_PAREN)
-            return ParenExpr(expr)
+    def class_def_stmt(self, items):
+        # grammar: IDENTIFIER(class) _KW_CLASS _KW_DERIVED IDENTIFIER(base) _KW_CLASS _KW_DEF method* _KW_END _KW_PERIOD
+        class_tok = self._dk(items[0])   # the new class (e.g. 无产 or Foo)
+        base_tok = self._dk(items[1])    # the base class
+        methods = list(items[2:])
+        return Statement(STMT_CLASS_DEF, (base_tok, class_tok, methods))
 
-        # Do we see a function call?
-        call_expr = self.TryParseCallExpr()
-        if call_expr:
-            return call_expr
+    def loop_stmt(self, items):
+        var_expr, from_expr, to_expr = items[0], items[1], items[2]
+        stmts = list(items[3:])
+        step_expr = NumberLiteralExpr(1, _loc())  # synthesised constant — no source token
+        return Statement(STMT_LOOP, (var_expr, from_expr, to_expr, step_expr, stmts))
 
-        # Do we see a list literal?
-        open_bracket = self.TryConsumeKeyword(KW_OPEN_BRACKET)
-        if open_bracket:
-            exprs = self.ParseExprList()
-            self.ConsumeKeyword(KW_CLOSE_BRACKET)
-            return ListExpr(exprs)
+    def step_loop_stmt(self, items):
+        var_expr, from_expr, to_expr, step_expr = items[0], items[1], items[2], items[3]
+        stmts = list(items[4:])
+        return Statement(STMT_LOOP, (var_expr, from_expr, to_expr, step_expr, stmts))
 
-        return None
+    def step_spec_rule(self, items):
+        # NUMBER_LITERAL(1) _KW_STEP step_expr _KW_STEP_LOOP → return step_expr
+        return items[1]  # items[0] is the number literal (always 1), items[1] is step_expr
 
-    def TryParseAtomicExpr(self):
-        negate = self.TryConsumeKeyword(KW_NEGATE)
-        if negate:
-            expr = self.TryParseAtomicExpr()
-            return NegateExpr(expr)
+    def range_loop_stmt(self, items):
+        var_expr, range_expr = items[0], items[1]
+        stmts = list(items[2:])
+        return Statement(STMT_RANGE_LOOP, (var_expr, range_expr, stmts))
 
-        obj = self.TryParseObjectExpr()
-        if not obj:
-            return None
+    def infinite_loop_stmt(self, items):
+        var_expr = items[0]
+        stmts = list(items[1:])
+        return Statement(STMT_INFINITE_LOOP, (var_expr, stmts))
 
-        expr = obj
-        while True:
-            pre_index_pos = self._pos
+    def assign_stmt(self, items):
+        return Statement(STMT_ASSIGN, (items[0], items[1]))
 
-            # Parse 的老大
-            index1_loc = self.loc
-            index1 = self.TryConsumeKeyword(KW_INDEX_1)
-            if index1:
-                # dongbei 数组是从1开始的。
-                expr = IndexExpr(expr, NumberLiteralExpr(1, index1_loc))
-                continue
+    def append_stmt(self, items):
+        return Statement(STMT_APPEND, (items[0], items[1]))
 
-            # Parse 的老幺
-            index_last_loc = self.loc
-            index_last = self.TryConsumeKeyword(KW_INDEX_LAST)
-            if index_last:
-                # 0 - 1 = -1
-                expr = IndexExpr(expr, NumberLiteralExpr(0, index_last_loc))
-                continue
+    def extend_stmt(self, items):
+        return Statement(STMT_EXTEND, (items[0], items[1]))
 
-            # Parse 的老
-            index = self.TryConsumeKeyword(KW_INDEX)
-            if index:
-                # Parse an ObjectExpr.
-                obj = self.TryParseObjectExpr()
-                if obj:
-                    expr = IndexExpr(expr, obj)
-                    continue
-                else:
-                    # We have a trailing 的老 without an object expression to follow it.
-                    self._pos = pre_index_pos
-                    break
+    def yield_stmt(self, items):
+        return Statement(STMT_YIELD, items[0])
 
-            # Parse 的
-            dot = self.TryConsumeKeyword(KW_DOT)
-            if dot:
-                property_ = self.ConsumeTokenType(TK_IDENTIFIER)
-                expr = ObjectPropertyExpr(expr, property_)
-                continue
+    def inc_stmt(self, items):
+        # items: [expr, KW_INC token]
+        assert self._dk(items[1]).value == KW_INC
+        return Statement(STMT_INC_BY, (items[0], NumberLiteralExpr(1, self._dk(items[1]).loc)))
 
-            # Parse method call.
-            call = self.TryParseCallExpr()
-            if call:
-                expr = MethodCallExpr(expr, call)
-                continue
+    def inc_by_stmt(self, items):
+        return Statement(STMT_INC_BY, (items[0], items[1]))
 
-            # Parse 有几个坑
-            length = self.TryConsumeKeyword(KW_LENGTH)
-            if length:
-                expr = LengthExpr(expr)
-                continue
+    def dec_stmt(self, items):
+        # items: [expr, KW_DEC token]
+        assert self._dk(items[1]).value == KW_DEC
+        return Statement(STMT_DEC_BY, (items[0], NumberLiteralExpr(1, self._dk(items[1]).loc)))
 
-            # Parse 掐头
-            remove_head = self.TryConsumeKeyword(KW_REMOVE_HEAD)
-            if remove_head:
-                expr = SubListExpr(expr, 1, None)
-                continue
+    def dec_by_stmt(self, items):
+        return Statement(STMT_DEC_BY, (items[0], items[1]))
 
-            # Parse 去尾
-            remove_tail = self.TryConsumeKeyword(KW_REMOVE_TAIL)
-            if remove_tail:
-                expr = SubListExpr(expr, None, 1)
-                continue
+    def expr_stmt(self, items):
+        expr = items[0]
+        if isinstance(expr, CallExpr):
+            return Statement(STMT_CALL, expr)
+        return Statement(STMT_EXPR, expr)
 
-            # Found neither 的老 or 有几个坑 after the expression.
-            break
+    # ── function / method definitions ────────────────────────────────────────
 
-        return expr
+    def func_def_no_params(self, items):
+        func_tok = self._dk(items[0])
+        stmts = list(items[1:])
+        return Statement(STMT_FUNC_DEF, (func_tok, [], stmts))
 
-    def TryParseTermExpr(self):
-        factor = self.TryParseAtomicExpr()
-        if not factor:
-            return None
+    def func_def_with_params(self, items):
+        func_tok = self._dk(items[0])
+        params = items[1]   # list from param_list
+        stmts = list(items[2:])
+        return Statement(STMT_FUNC_DEF, (func_tok, params, stmts))
 
-        factors = [factor]  # All factors of the term.
-        operators = (
-            []
-        )  # Operators between the factors. The len of this is len(factors) - 1.
+    def method_def_no_params(self, items):
+        func_tok = self._dk(items[0])
+        stmts = list(items[1:])
+        params = [IdentifierToken(ID_SELF, _loc())]  # implicit self — no source token
+        return Statement(STMT_FUNC_DEF, (func_tok, params, stmts))
 
-        while True:
-            pre_operator_pos = self._pos
-            operator = self.TryConsumeKeyword(KW_TIMES)
-            if not operator:
-                operator = self.TryConsumeKeyword(KW_DIVIDE_BY)
-            if not operator:
-                operator = self.TryConsumeKeyword(KW_INTEGER_DIVIDE_BY)
-            if not operator:
-                operator = self.TryConsumeKeyword(KW_MODULO)
-            if not operator:
-                break
+    def method_def_with_params(self, items):
+        func_tok = self._dk(items[0])
+        params = items[1]   # list from param_list
+        stmts = list(items[2:])
+        all_params = [IdentifierToken(ID_SELF, _loc())] + params  # implicit self — no source token
+        return Statement(STMT_FUNC_DEF, (func_tok, all_params, stmts))
 
-            factor = self.TryParseAtomicExpr()
-            if factor:
-                operators.append(operator)
-                factors.append(factor)
-            else:
-                # We have a trailing operator without a factor to follow it.
-                self._pos = pre_operator_pos
-                break
+    def param_list(self, items):
+        return [self._dk(tok) for tok in items]
 
-        assert len(factors) == len(operators) + 1
-        expr = factors[0]
-        for i, operator in enumerate(operators):
-            expr = ArithmeticExpr(expr, operator, factors[i + 1])
-        return expr
+    # ── expressions ──────────────────────────────────────────────────────────
 
-    def TryParseArithmeticExpr(self):
-        term = self.TryParseTermExpr()
-        if not term:
-            return None
+    def concat_expr(self, items):
+        if len(items) == 1:
+            return items[0]
+        return ConcatExpr(list(items))
 
-        terms = [term]  # All terms of the expression.
-        operators = (
-            []
-        )  # Operators between the terms. The len of this is len(terms) - 1.
+    def comp_greater(self, items):
+        # items: [left_expr, right_expr, KW_GREATER token]
+        assert self._dk(items[2]).value == KW_GREATER
+        return ComparisonExpr(items[0], Keyword(KW_GREATER, self._dk(items[2]).loc), items[1])
 
-        while True:
-            pre_operator_pos = self._pos
-            operator = self.TryConsumeKeyword(KW_PLUS)
-            if not operator:
-                operator = self.TryConsumeKeyword(KW_MINUS)
-            if not operator:
-                break
+    def comp_less(self, items):
+        # items: [left_expr, right_expr, KW_LESS token]
+        assert self._dk(items[2]).value == KW_LESS
+        return ComparisonExpr(items[0], Keyword(KW_LESS, self._dk(items[2]).loc), items[1])
 
-            term = self.TryParseTermExpr()
-            if term:
-                operators.append(operator)
-                terms.append(term)
-            else:
-                # We have a trailing operator without a term to follow it.
-                self._pos = pre_operator_pos
-                break
+    def comp_is_none(self, items):
+        # items: [left_expr, KW_IS_NONE token]
+        assert self._dk(items[1]).value == KW_IS_NONE
+        return ComparisonExpr(items[0], Keyword(KW_IS_NONE, self._dk(items[1]).loc), None)
 
-        assert len(terms) == len(operators) + 1
-        expr = terms[0]
-        for i, operator in enumerate(operators):
-            expr = ArithmeticExpr(expr, operator, terms[i + 1])
-        return expr
+    def comp_eq(self, items):
+        # items: [left_expr, right_expr, KW_EQUAL token]
+        assert self._dk(items[2]).value == KW_EQUAL
+        return ComparisonExpr(items[0], Keyword(KW_EQUAL, self._dk(items[2]).loc), items[1])
 
-    def TryParseCallExpr(self):
-        """Returns call_expr, mutating self.tokens."""
-        call = self.TryConsumeKeyword(KW_CALL)
-        if not call:
-            return None
+    def comp_neq(self, items):
+        # items: [left_expr, right_expr, KW_NOT_EQUAL token]
+        assert self._dk(items[2]).value == KW_NOT_EQUAL
+        return ComparisonExpr(items[0], Keyword(KW_NOT_EQUAL, self._dk(items[2]).loc), items[1])
 
-        base_init = self.TryConsumeKeyword(KW_BASE_INIT)
-        if base_init:
-            func_name = "super().__init__"
-        else:
-            func = self.ConsumeTokenType(TK_IDENTIFIER)
-            func_name = func.value
+    def singleton_tuple_expr(self, items):
+        return TupleExpr((items[0],))
 
-        open_paren = self.TryConsumeKeyword(KW_OPEN_PAREN)
-        args = []
-        if open_paren:
-            args = self.ParseExprList()
-            self.ConsumeKeyword(KW_CLOSE_PAREN)
+    def cons_tuple_expr(self, items):
+        # items[0]: head element; items[1]: tail TupleExpr
+        return TupleExpr((items[0],) + items[1].tuple)
+
+    # Arithmetic; items: [left_expr, KW_OP token, right_expr]
+    def add_expr(self, items):
+        assert self._dk(items[1]).value == KW_PLUS
+        return ArithmeticExpr(items[0], Keyword(KW_PLUS, self._dk(items[1]).loc), items[2])
+
+    def sub_expr(self, items):
+        assert self._dk(items[1]).value == KW_MINUS
+        return ArithmeticExpr(items[0], Keyword(KW_MINUS, self._dk(items[1]).loc), items[2])
+
+    def mul_expr(self, items):
+        assert self._dk(items[1]).value == KW_TIMES
+        return ArithmeticExpr(items[0], Keyword(KW_TIMES, self._dk(items[1]).loc), items[2])
+
+    def div_expr(self, items):
+        assert self._dk(items[1]).value == KW_DIVIDE_BY
+        return ArithmeticExpr(items[0], Keyword(KW_DIVIDE_BY, self._dk(items[1]).loc), items[2])
+
+    def idiv_expr(self, items):
+        assert self._dk(items[1]).value == KW_INTEGER_DIVIDE_BY
+        return ArithmeticExpr(items[0], Keyword(KW_INTEGER_DIVIDE_BY, self._dk(items[1]).loc), items[2])
+
+    def mod_expr(self, items):
+        assert self._dk(items[1]).value == KW_MODULO
+        return ArithmeticExpr(items[0], Keyword(KW_MODULO, self._dk(items[1]).loc), items[2])
+
+    # Postfix / prefix
+    def negate_expr(self, items):
+        return NegateExpr(items[0])
+
+    def index1_expr(self, items):
+        # items: [atom_expr, KW_INDEX_1 token]
+        assert self._dk(items[1]).value == KW_INDEX_1
+        return IndexExpr(items[0], NumberLiteralExpr(1, self._dk(items[1]).loc))
+
+    def index_last_expr(self, items):
+        # items: [atom_expr, KW_INDEX_LAST token]
+        assert self._dk(items[1]).value == KW_INDEX_LAST
+        return IndexExpr(items[0], NumberLiteralExpr(0, self._dk(items[1]).loc))
+
+    def index_expr(self, items):
+        return IndexExpr(items[0], items[1])
+
+    def dot_expr(self, items):
+        return ObjectPropertyExpr(items[0], self._dk(items[1]))
+
+    def method_call_expr(self, items):
+        return MethodCallExpr(items[0], items[1])
+
+    def length_expr(self, items):
+        return LengthExpr(items[0])
+
+    def remove_head_expr(self, items):
+        return SubListExpr(items[0], 1, None)
+
+    def remove_tail_expr(self, items):
+        return SubListExpr(items[0], None, 1)
+
+    # Object expressions
+    def empty_tuple_expr(self, items):
+        return TupleExpr(())
+
+    def num_literal_expr(self, items):
+        return LiteralExpr(self._dk(items[0]))
+
+    def none_literal_expr(self, items):
+        # items: [KW_IS_NONE token]
+        assert self._dk(items[0]).value == KW_IS_NONE
+        return LiteralExpr(Token(TK_NONE_LITERAL, None, self._dk(items[0]).loc))
+
+    def str_literal_expr(self, items):
+        return LiteralExpr(self._dk(items[0]))
+
+    def new_object_expr(self, items):
+        return NewObjectExpr(self._dk(items[0]), [])
+
+    def new_object_with_args_expr(self, items):
+        class_tok = self._dk(items[0])
+        args = items[1]
+        return NewObjectExpr(class_tok, args)
+
+    def variable_expr(self, items):
+        return VariableExpr(self._dk(items[0]).value)
+
+    def paren_expr(self, items):
+        return ParenExpr(items[0])
+
+    def list_literal_expr(self, items):
+        return ListExpr(items[0])
+
+    def empty_list_expr(self, items):
+        return ListExpr([])
+
+    # Call expressions
+    def call_base_init(self, items):
+        args = items[0] if items else []
+        return CallExpr("super().__init__", args)
+
+    def call_func(self, items):
+        func_name = self._dk(items[0]).value
+        args = items[1] if len(items) > 1 else []
         return CallExpr(func_name, args)
 
-    def TryParseTupleExpr(self):
-        orig_pos = self._pos
-        expr = self.TryParseCompOrArithExpr()
-        if not expr:
-            self._pos = orig_pos
-            return None
+    def expr_list(self, items):
+        return list(items)
 
-        # Do we see 抱团?
-        tuple = self.TryConsumeKeyword(KW_TUPLE)
-        if tuple:
-            return TupleExpr((expr,))
 
-        # Do we see 跟？
-        and_ = self.TryConsumeKeyword(KW_COMPARE_WITH)
-        if and_:
-            rest_of_tuple = self.TryParseTupleExpr()
-            if rest_of_tuple:
-                return TupleExpr((expr,) + rest_of_tuple.tuple)
-
-        self._pos = orig_pos
-        return None
-
-    def TryParseNonConcatExpr(self):
-        tuple = self.TryParseTupleExpr()
-        if tuple:
-            return tuple
-        expr = self.TryParseCompOrArithExpr()
-        return expr
-
-    def TryParseExpr(self):
-        nc_expr = self.TryParseNonConcatExpr()
-        if not nc_expr:
-            return None
-
-        nc_exprs = [nc_expr]
-        while True:
-            pre_operator_pos = self._pos
-            concat = self.TryConsumeKeyword(KW_CONCAT)
-            if not concat:
-                break
-
-            nc_expr = self.TryParseNonConcatExpr()
-            if nc_expr:
-                nc_exprs.append(nc_expr)
-            else:
-                # We have a trailing concat operator without an expression to follow it.
-                self._pos = pre_operator_pos
-                break
-
-        if len(nc_exprs) == 1:
-            return nc_exprs[0]
-
-        return ConcatExpr(nc_exprs)
-
-    def ParseExpr(self):
-        expr = self.TryParseExpr()
-        assert expr, "指望一个表达式，结果啥也没有；%s" % self._tokens[self._pos:self._pos+5]
-        return expr
-
-    def TryParseCompOrArithExpr(self):
-        arith = self.TryParseArithmeticExpr()
-        if not arith:
-            return None
-        post_arith_pos = self._pos
-
-        cmp = self.TryConsumeKeyword(KW_COMPARE)
-        if cmp:
-            arith2 = self.ParseArithmeticExpr()
-            relation = self.TryConsumeKeyword(KW_GREATER)
-            if not relation:
-                relation = self.ConsumeKeyword(KW_LESS)
-            return ComparisonExpr(arith, relation, arith2)
-
-        cmp = self.TryConsumeKeyword(KW_COMPARE_WITH)
-        if cmp:
-            arith2 = self.TryParseArithmeticExpr()
-            if not arith2:
-                self._pos = post_arith_pos
-                return arith
-            relation = self.TryConsumeKeyword(KW_EQUAL)
-            if not relation:
-                relation = self.TryConsumeKeyword(KW_NOT_EQUAL)
-                if not relation:
-                    self._pos = post_arith_pos
-                    return arith
-            return ComparisonExpr(arith, relation, arith2)
-
-        cmp_loc = self.loc
-        cmp = self.TryConsumeKeyword(KW_IS_NONE)
-        if cmp:
-            return ComparisonExpr(arith, Keyword(KW_IS_NONE, cmp_loc), None)
-
-        return arith
-
-    def ParseArithmeticExpr(self):
-        expr = self.TryParseArithmeticExpr()
-        assert expr, "期望 ArithmeticExpr。落空了：%s" % (self._tokens[self._pos:self._pos+5],)
-        return expr
-
-    def TryParseFuncDef(self, is_method=False):
-        orig_pos = self._pos
-        id = self.TryConsumeTokenType(TK_IDENTIFIER)
-        if not id:
-            return None
-
-        open_paren = self.TryConsumeKeyword(KW_OPEN_PAREN)
-        params = [IdentifierToken(ID_SELF, self.loc)] if is_method else []
-        if open_paren:
-            while True:
-                param = self.ConsumeTokenType(TK_IDENTIFIER)
-                params.append(param)
-                close_paren = self.TryConsumeKeyword(KW_CLOSE_PAREN)
-                if close_paren:
-                    break
-                self.ConsumeKeyword(KW_COMMA)
-
-            func_def = self.ConsumeToken(Keyword(KW_DEF, None))
-            stmts = self.ParseStmts()
-            self.ConsumeKeyword(KW_END)
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_FUNC_DEF, (id, params, stmts))
-
-        # not open_paren
-        func_def = self.TryConsumeKeyword(KW_DEF)
-        if func_def:
-            stmts = self.ParseStmts()
-            self.ConsumeKeyword(KW_END)
-            self.ConsumeKeyword(KW_PERIOD)
-            return Statement(STMT_FUNC_DEF, (id, params, stmts))
-
-        self._pos = orig_pos
-        return None
-
-    def ParseMethodDefs(self):
-        methods = []
-        while True:
-            method = self.TryParseFuncDef(is_method=True)
-            if method:
-                methods.append(method)
-            else:
-                return methods
-
-    def ParseStmt(self):
-        stmt = self.TryParseStmt()
-        assert stmt, "期望语句，落空了：%s" % (self._tokens[self._pos:self._pos+5],)
-        return stmt
-
-    def TryConsumeTokenType(self, tk_type):
-        if self._pos >= len(self._tokens):
-            return None
-        if self._tokens[self._pos].kind == tk_type:
-            token = self._tokens[self._pos]
-            self._pos += 1
-            return token
-        return None
-
-    def ConsumeTokenType(self, tk_type):
-        tk = self.TryConsumeTokenType(tk_type)
-        if tk is None:
-            raise Exception(
-                "%s: 期望 %s，实际是 %s" % (self._tokens[self._pos].loc, tk_type, self._tokens[self._pos])
-            )
-        return tk
-
-    def TryConsumeToken(self, token):
-        if self._pos >= len(self._tokens):
-            return None
-        if token != self._tokens[self._pos]:
-            return None
-        self._pos += 1
-        return token
-
-    def ConsumeToken(self, token):
-        """Consumes the given token, ignoring token.loc."""
-        if self._pos >= len(self._tokens):
-            raise Exception(f"{self.loc}: 语句结束太早。")
-        if token != self._tokens[self._pos]:
-            raise Exception(
-                "%s: 期望符号 %s，实际却是 %s。" % (self._tokens[self._pos].loc, token, self._tokens[self._pos])
-            )
-        found_token = self._tokens[self._pos]
-        self._pos += 1
-        return found_token
-
-    def ConsumeKeyword(self, keyword):
-        return self.ConsumeToken(Keyword(keyword, None))
-
-    def ParseExprList(self):
-        """Parses a comma-separated expression list."""
-
-        exprs = []
-        pos_after_expr_list = self._pos
-        while True:
-            expr = self.TryParseExpr()
-            pos_after_expr_list = self._pos
-            if expr:
-                exprs.append(expr)
-            else:
-                # Couldn't parse an expression.
-                self._pos = pos_after_expr_list
-                return exprs
-            self._pos = pos_after_expr_list
-            comma = self.TryConsumeKeyword(KW_COMMA)
-            if not comma:
-                self._pos = pos_after_expr_list
-                return exprs
-
-    # End of class DongbeiParser
+# Cached Lark parser (compiled once at import time).
+_lark_parser = lark.Lark(
+    _DONGBEI_GRAMMAR,
+    parser="earley",
+    lexer=_DongbeiLexer,
+    start=["start", "start_expr", "start_stmt"],
+    ambiguity="resolve",
+)
+_lark_transformer = _DongbeiTransformer()
 
 
 ID_ARGV = "最高指示"
@@ -1791,25 +1741,17 @@ def GetPythonVarName(var):
 # Not meant to be in DongbeiParser.
 def ParseExprFromStr(str):
     parser = DongbeiParser()
-    parser._tokens = parser.Tokenize(str, None)
-    parser._pos = 0
-    return parser.ParseExpr(), parser._tokens[parser._pos:]
-
-
-# Not meant to be in DongbeiParser.
-def TryParseExprFromStr(str):
-    parser = DongbeiParser()
-    parser._tokens = parser.Tokenize(str, None)
-    parser._pos = 0
-    return parser.TryParseExpr(), parser._tokens[parser._pos:]
+    tokens = parser.Tokenize(str, None)
+    tree = _lark_parser.parse(tokens, start="start_expr")
+    return _lark_transformer.transform(tree)
 
 
 # Not meant to be in DongbeiParser.
 def ParseStmtFromStr(str):
     parser = DongbeiParser()
-    parser._tokens = parser.Tokenize(str, None)
-    parser._pos = 0
-    return parser.ParseStmt(), parser._tokens[parser._pos:]
+    tokens = parser.Tokenize(str, None)
+    tree = _lark_parser.parse(tokens, start="start_stmt")
+    return _lark_transformer.transform(tree)
 
 
 def TranslateStatementToPython(stmt, indent=""):

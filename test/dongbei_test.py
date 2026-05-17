@@ -41,6 +41,7 @@ from src.dongbei import TK_STRING_LITERAL
 from src.dongbei import Token
 from src.dongbei import TranslateDongbeiToPython
 from src.dongbei import VariableExpr
+from src.dongbei import SourceLoc
 
 
 def Keyword(value):
@@ -69,59 +70,75 @@ def StringLiteralExpr(value):
 
 class DongbeiParseExprTest(unittest.TestCase):
     def testParseNumber(self):
-        self.assertEqual(ParseExprFromStr("5")[0], NumberLiteralExpr(5))
-        self.assertEqual(ParseExprFromStr("九")[0], NumberLiteralExpr(9))
+        self.assertEqual(ParseExprFromStr("5"), NumberLiteralExpr(5))
+        self.assertEqual(ParseExprFromStr("九"), NumberLiteralExpr(9))
 
     def testParseStringLiteral(self):
         self.assertEqual(
-            ParseExprFromStr("“ 哈  哈   ”")[0], StringLiteralExpr(" 哈  哈   ")
+            ParseExprFromStr("“ 哈  哈   ”"), StringLiteralExpr(" 哈  哈   ")
         )
 
     def testParseIdentifier(self):
-        self.assertEqual(ParseExprFromStr("老王")[0], VariableExpr("老王"))
+        self.assertEqual(ParseExprFromStr("老王"), VariableExpr("老王"))
 
     def testParseParens(self):
         # Wide parens.
-        self.assertEqual(ParseExprFromStr("（老王）")[0], ParenExpr(VariableExpr("老王")))
+        self.assertEqual(ParseExprFromStr("（老王）"), ParenExpr(VariableExpr("老王")))
         # Narrow parens.
-        self.assertEqual(ParseExprFromStr("(老王)")[0], ParenExpr(VariableExpr("老王")))
+        self.assertEqual(ParseExprFromStr("(老王)"), ParenExpr(VariableExpr("老王")))
 
     def testParseCallExpr(self):
-        self.assertEqual(ParseExprFromStr("整老王")[0], CallExpr("老王", []))
+        self.assertEqual(ParseExprFromStr("整老王"), CallExpr("老王", []))
         self.assertEqual(
-            ParseExprFromStr("整老王（5）")[0], CallExpr("老王", [NumberLiteralExpr(5)])
+            ParseExprFromStr("整老王（5）"), CallExpr("老王", [NumberLiteralExpr(5)])
         )
         self.assertEqual(
-            ParseExprFromStr("整老王(6)")[0], CallExpr("老王", [NumberLiteralExpr(6)])
+            ParseExprFromStr("整老王(6)"), CallExpr("老王", [NumberLiteralExpr(6)])
         )
         self.assertEqual(
-            ParseExprFromStr("整老王(老刘，6)")[0],
+            ParseExprFromStr("整老王(老刘，6)"),
             CallExpr("老王", [VariableExpr("老刘"), NumberLiteralExpr(6)]),
         )
         self.assertEqual(
-            ParseExprFromStr("整老王(“你”，老刘，6)")[0],
+            ParseExprFromStr("整老王(“你”，老刘，6)"),
             CallExpr(
                 "老王", [StringLiteralExpr("你"), VariableExpr("老刘"), NumberLiteralExpr(6)]
             ),
         )
         self.assertEqual(
-            ParseExprFromStr("整老王(“你”,老刘，6)")[0],
+            ParseExprFromStr("整老王(“你”,老刘，6)"),
             CallExpr(
                 "老王", [StringLiteralExpr("你"), VariableExpr("老刘"), NumberLiteralExpr(6)]
             ),
+        )
+
+    def testParseCallExprEmptyParens(self):
+        # regression: Lark grammar requires explicit empty-paren rule
+        self.assertEqual(ParseExprFromStr("整老王（）"), CallExpr("老王", []))
+        self.assertEqual(ParseExprFromStr("整老王()"), CallExpr("老王", []))
+
+    def testParseCallExprDottedName(self):
+        # module.func and obj.method tokenize as a single IDENTIFIER
+        self.assertEqual(
+            ParseExprFromStr("整random.choice（老刘）"),
+            CallExpr("random.choice", [VariableExpr("老刘")]),
+        )
+        self.assertEqual(
+            ParseExprFromStr("整老王.upper（）"),
+            CallExpr("老王.upper", []),
         )
 
     def testParseTermExpr(self):
         self.assertEqual(
-            ParseExprFromStr("老王乘五")[0],
+            ParseExprFromStr("老王乘五"),
             ArithmeticExpr(VariableExpr("老王"), Keyword("乘"), NumberLiteralExpr(5)),
         )
         self.assertEqual(
-            ParseExprFromStr("五除以老王")[0],
+            ParseExprFromStr("五除以老王"),
             ArithmeticExpr(NumberLiteralExpr(5), Keyword("除以"), VariableExpr("老王")),
         )
         self.assertEqual(
-            ParseExprFromStr("五除以老王乘老刘")[0],
+            ParseExprFromStr("五除以老王乘老刘"),
             ArithmeticExpr(
                 ArithmeticExpr(NumberLiteralExpr(5), Keyword("除以"), VariableExpr("老王")),
                 Keyword("乘"),
@@ -131,11 +148,11 @@ class DongbeiParseExprTest(unittest.TestCase):
 
     def testParseArithmeticExpr(self):
         self.assertEqual(
-            ParseExprFromStr("5加六")[0],
+            ParseExprFromStr("5加六"),
             ArithmeticExpr(NumberLiteralExpr(5), Keyword("加"), NumberLiteralExpr(6)),
         )
         self.assertEqual(
-            ParseExprFromStr("5加六乘3")[0],
+            ParseExprFromStr("5加六乘3"),
             ArithmeticExpr(
                 NumberLiteralExpr(5),
                 Keyword("加"),
@@ -145,7 +162,7 @@ class DongbeiParseExprTest(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            ParseExprFromStr("5减六减老王")[0],
+            ParseExprFromStr("5减六减老王"),
             ArithmeticExpr(
                 ArithmeticExpr(
                     NumberLiteralExpr(5), Keyword("减"), NumberLiteralExpr(6)
@@ -157,11 +174,11 @@ class DongbeiParseExprTest(unittest.TestCase):
 
     def testParseComparisonExpr(self):
         self.assertEqual(
-            ParseExprFromStr("5比6还大")[0],
+            ParseExprFromStr("5比6还大"),
             ComparisonExpr(NumberLiteralExpr(5), Keyword("还大"), NumberLiteralExpr(6)),
         )
         self.assertEqual(
-            ParseExprFromStr("老王加5比6还小")[0],
+            ParseExprFromStr("老王加5比6还小"),
             ComparisonExpr(
                 ArithmeticExpr(VariableExpr("老王"), Keyword("加"), NumberLiteralExpr(5)),
                 Keyword("还小"),
@@ -169,11 +186,11 @@ class DongbeiParseExprTest(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            ParseExprFromStr("老王跟老刘一样一样的")[0],
+            ParseExprFromStr("老王跟老刘一样一样的"),
             ComparisonExpr(VariableExpr("老王"), Keyword("一样一样的"), VariableExpr("老刘")),
         )
         self.assertEqual(
-            ParseExprFromStr("老王加5跟6不是一样一样的")[0],
+            ParseExprFromStr("老王加5跟6不是一样一样的"),
             ComparisonExpr(
                 ArithmeticExpr(VariableExpr("老王"), Keyword("加"), NumberLiteralExpr(5)),
                 Keyword("不是一样一样的"),
@@ -183,13 +200,13 @@ class DongbeiParseExprTest(unittest.TestCase):
 
     def testParseConcatExpr(self):
         self.assertEqual(
-            ParseExprFromStr("老王、2")[0],
+            ParseExprFromStr("老王、2"),
             ConcatExpr([VariableExpr("老王"), NumberLiteralExpr(2)]),
         )
 
     def testParseConcatExpr(self):
         self.assertEqual(
-            ParseExprFromStr("老王加油、2、“哈”")[0],
+            ParseExprFromStr("老王加油、2、“哈”"),
             ConcatExpr(
                 [
                     ArithmeticExpr(VariableExpr("老王"), Keyword("加"), VariableExpr("油")),
@@ -203,7 +220,7 @@ class DongbeiParseExprTest(unittest.TestCase):
 class DongbeiParseStatementTest(unittest.TestCase):
     def testParseConditional(self):
         self.assertEqual(
-            ParseStmtFromStr("寻思：老王比五还大？要行咧就嘀咕：老王。")[0],
+            ParseStmtFromStr("寻思：老王比五还大？要行咧就嘀咕：老王。"),
             Statement(
                 STMT_CONDITIONAL,
                 (
@@ -1553,6 +1570,43 @@ class DongbeiTokenizerRecursionTest(unittest.TestCase):
             TranslateAndRun(code)
         except RecursionError:
             self.fail("BasicTokenize hit Python recursion limit on large input")
+
+
+class DongbeiSourceLocTest(unittest.TestCase):
+    """Verify that source locations survive the Lark transformer.
+
+    Each test picks a string where the operator keyword is NOT at column 0,
+    so a wrong loc (the dummy _loc() default of <unknown>:1:0) is distinguishable
+    from the correct one.
+    """
+
+    def testArithmeticOpLoc(self):
+        # "五加老王": 五 at col 0, 加 at col 1 (KW_PLUS).
+        expr = ParseExprFromStr("五加老王")
+        self.assertEqual(expr.operation.loc, SourceLoc("<unknown>", 1, 1))
+
+    def testComparisonEqLoc(self):
+        # "五跟老王一样一样的": 一样一样的 starts at col 4 (after 五跟老王).
+        expr = ParseExprFromStr("五跟老王一样一样的")
+        self.assertEqual(expr.relation.loc, SourceLoc("<unknown>", 1, 4))
+
+    def testComparisonIsNoneLoc(self):
+        # "老王啥也不是": 啥也不是 starts at col 2 (after 老王).
+        expr = ParseExprFromStr("老王啥也不是")
+        self.assertEqual(expr.relation.loc, SourceLoc("<unknown>", 1, 2))
+
+    def testOpLocWithFilename(self):
+        # When tokenized with a named source file, operator loc carries the filename.
+        parser = DongbeiParser()
+        tokens = parser.Tokenize("五加老王", "foo.dongbei")
+        tree = dongbei._lark_parser.parse(tokens, start="start_expr")
+        expr = dongbei._lark_transformer.transform(tree)
+        self.assertEqual(expr.operation.loc, SourceLoc("foo.dongbei", 1, 1))
+
+    def testOpLocOnLine2(self):
+        # 加 is on line 2 (preceded by newline after 五 on line 1).
+        expr = ParseExprFromStr("五\n加老王")
+        self.assertEqual(expr.operation.loc, SourceLoc("<unknown>", 2, 0))
 
 
 if __name__ == "__main__":

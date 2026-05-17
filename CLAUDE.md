@@ -25,13 +25,11 @@ src/dongbei.py --xudao <文件>.dongbei
 src/dongbei.py
 
 # 跑全部测试
-python -m pytest test/dongbei_test.py
-# 或者
-python -m unittest test/dongbei_test
+python3 -m unittest test/dongbei_test
 
 # 跑单个测试类或测试方法
-python -m unittest test.dongbei_test.DongbeiParseExprTest
-python -m unittest test.dongbei_test.DongbeiParseExprTest.testParseNumber
+python3 -m unittest test.dongbei_test.DongbeiParseExprTest
+python3 -m unittest test.dongbei_test.DongbeiParseExprTest.testParseNumber
 ```
 
 ## 代码架构
@@ -75,6 +73,8 @@ python -m unittest test.dongbei_test.DongbeiParseExprTest.testParseNumber
 每个 PR **必须** 同时包含：
 1. 文档更新（`README.md` 和 `doc/cheatsheet.md`）
 2. 对应的测试案例（`test/dongbei_test.py`）
+
+新加测试案例时，**每个测试方法只整一件事**——别把好几件不同的事塞一个方法里。一个萝卜一个坑，清清楚楚，省得将来查问题抓瞎。
 
 ## 发布流程
 
