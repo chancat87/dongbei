@@ -14,4 +14,4 @@ Code quality issues found during review of `src/dongbei.py`.
 
 - [x] **#6** Replace `type() ==` comparisons with `isinstance()` (lines 280, 352) — the `Expr.__eq__` form (line 352) intentionally rejects subclasses; add a comment explaining why. The `SourceLoc` one (line 280) has no such reason and should use `isinstance()`.
 
-- [ ] **#7** Replace O(n) token list slicing with an index pointer — every `TryConsumeToken`/`ConsumeToken` call does `self.tokens = self.tokens[1:]`, copying O(remaining) references and making parsing O(n²). Replace with a `(tokens, pos)` pair and advance the integer index; backtracking becomes a single integer save/restore.
+- [x] **#7** Replace O(n) token list slicing with an index pointer — every `TryConsumeToken`/`ConsumeToken` call does `self.tokens = self.tokens[1:]`, copying O(remaining) references and making parsing O(n²). Replace with a `(tokens, pos)` pair and advance the integer index; backtracking becomes a single integer save/restore.

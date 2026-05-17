@@ -878,7 +878,8 @@ class DongbeiParser(object):
     # TODO: split the code into lines to make skipping lines faster.
     def __init__(self):
         self.code_loc = SourceCodeAndLoc(None, None)
-        self.tokens = []  # remaining tokens
+        self._tokens = []  # all tokens from tokenization
+        self._pos = 0  # current position in self._tokens
 
     @property
     def code(self):
@@ -1019,9 +1020,10 @@ class DongbeiParser(object):
         return tokens
 
     def TranslateTokensToStatements(self, tokens):
-        self.tokens = tokens
+        self._tokens = tokens
+        self._pos = 0
         statements = self.ParseStmts()
-        assert not self.tokens, "多余符号：%s" % (self.tokens,)
+        assert self._pos >= len(self._tokens), "多余符号：%s" % (self._tokens[self._pos:],)
         return statements
 
     def ParseStmts(self):
@@ -1037,7 +1039,7 @@ class DongbeiParser(object):
     def TryParseStmt(self):
         """Returns statement, mutating self.tokens)."""
 
-        orig_tokens = self.tokens
+        orig_pos = self._pos
 
         # Parse 翠花，上
         imp = self.TryConsumeKeyword(KW_IMPORT)
@@ -1171,7 +1173,7 @@ class DongbeiParser(object):
                 self.ConsumeKeyword(KW_PERIOD)
                 return Statement(STMT_CLASS_DEF, (subclass, id, methods))
 
-        self.tokens = orig_tokens
+        self._pos = orig_pos
         expr1 = self.TryParseExpr()
         if expr1:
             # Code below is for statements that start with an expression.
@@ -1279,7 +1281,7 @@ class DongbeiParser(object):
             self.ConsumeKeyword(KW_PERIOD)
             return Statement(STMT_EXPR, expr1)
 
-        self.tokens = orig_tokens
+        self._pos = orig_pos
         return None
 
     def TryConsumeKeyword(self, keyword):
@@ -1358,7 +1360,7 @@ class DongbeiParser(object):
 
         expr = obj
         while True:
-            pre_index_tokens = self.tokens
+            pre_index_pos = self._pos
 
             # Parse 的老大
             index1_loc = self.loc
@@ -1386,7 +1388,7 @@ class DongbeiParser(object):
                     continue
                 else:
                     # We have a trailing 的老 without an object expression to follow it.
-                    self.tokens = pre_index_tokens
+                    self._pos = pre_index_pos
                     break
 
             # Parse 的
@@ -1436,7 +1438,7 @@ class DongbeiParser(object):
         )  # Operators between the factors. The len of this is len(factors) - 1.
 
         while True:
-            pre_operator_tokens = self.tokens
+            pre_operator_pos = self._pos
             operator = self.TryConsumeKeyword(KW_TIMES)
             if not operator:
                 operator = self.TryConsumeKeyword(KW_DIVIDE_BY)
@@ -1453,7 +1455,7 @@ class DongbeiParser(object):
                 factors.append(factor)
             else:
                 # We have a trailing operator without a factor to follow it.
-                self.tokens = pre_operator_tokens
+                self._pos = pre_operator_pos
                 break
 
         assert len(factors) == len(operators) + 1
@@ -1473,7 +1475,7 @@ class DongbeiParser(object):
         )  # Operators between the terms. The len of this is len(terms) - 1.
 
         while True:
-            pre_operator_tokens = self.tokens
+            pre_operator_pos = self._pos
             operator = self.TryConsumeKeyword(KW_PLUS)
             if not operator:
                 operator = self.TryConsumeKeyword(KW_MINUS)
@@ -1486,7 +1488,7 @@ class DongbeiParser(object):
                 terms.append(term)
             else:
                 # We have a trailing operator without a term to follow it.
-                self.tokens = pre_operator_tokens
+                self._pos = pre_operator_pos
                 break
 
         assert len(terms) == len(operators) + 1
@@ -1516,10 +1518,10 @@ class DongbeiParser(object):
         return CallExpr(func_name, args)
 
     def TryParseTupleExpr(self):
-        orig_tokens = self.tokens
+        orig_pos = self._pos
         expr = self.TryParseCompOrArithExpr()
         if not expr:
-            self.tokens = orig_tokens
+            self._pos = orig_pos
             return None
 
         # Do we see 抱团?
@@ -1534,7 +1536,7 @@ class DongbeiParser(object):
             if rest_of_tuple:
                 return TupleExpr((expr,) + rest_of_tuple.tuple)
 
-        self.tokens = orig_tokens
+        self._pos = orig_pos
         return None
 
     def TryParseNonConcatExpr(self):
@@ -1551,7 +1553,7 @@ class DongbeiParser(object):
 
         nc_exprs = [nc_expr]
         while True:
-            pre_operator_tokens = self.tokens
+            pre_operator_pos = self._pos
             concat = self.TryConsumeKeyword(KW_CONCAT)
             if not concat:
                 break
@@ -1561,7 +1563,7 @@ class DongbeiParser(object):
                 nc_exprs.append(nc_expr)
             else:
                 # We have a trailing concat operator without an expression to follow it.
-                self.tokens = pre_operator_tokens
+                self._pos = pre_operator_pos
                 break
 
         if len(nc_exprs) == 1:
@@ -1571,14 +1573,14 @@ class DongbeiParser(object):
 
     def ParseExpr(self):
         expr = self.TryParseExpr()
-        assert expr, "指望一个表达式，结果啥也没有；%s" % self.tokens[:5]
+        assert expr, "指望一个表达式，结果啥也没有；%s" % self._tokens[self._pos:self._pos+5]
         return expr
 
     def TryParseCompOrArithExpr(self):
         arith = self.TryParseArithmeticExpr()
         if not arith:
             return None
-        post_arith_tokens = self.tokens
+        post_arith_pos = self._pos
 
         cmp = self.TryConsumeKeyword(KW_COMPARE)
         if cmp:
@@ -1592,13 +1594,13 @@ class DongbeiParser(object):
         if cmp:
             arith2 = self.TryParseArithmeticExpr()
             if not arith2:
-                self.tokens = post_arith_tokens
+                self._pos = post_arith_pos
                 return arith
             relation = self.TryConsumeKeyword(KW_EQUAL)
             if not relation:
                 relation = self.TryConsumeKeyword(KW_NOT_EQUAL)
                 if not relation:
-                    self.tokens = post_arith_tokens
+                    self._pos = post_arith_pos
                     return arith
             return ComparisonExpr(arith, relation, arith2)
 
@@ -1611,11 +1613,11 @@ class DongbeiParser(object):
 
     def ParseArithmeticExpr(self):
         expr = self.TryParseArithmeticExpr()
-        assert expr, "期望 ArithmeticExpr。落空了：%s" % (self.tokens[:5],)
+        assert expr, "期望 ArithmeticExpr。落空了：%s" % (self._tokens[self._pos:self._pos+5],)
         return expr
 
     def TryParseFuncDef(self, is_method=False):
-        orig_tokens = self.tokens
+        orig_pos = self._pos
         id = self.TryConsumeTokenType(TK_IDENTIFIER)
         if not id:
             return None
@@ -1645,7 +1647,7 @@ class DongbeiParser(object):
             self.ConsumeKeyword(KW_PERIOD)
             return Statement(STMT_FUNC_DEF, (id, params, stmts))
 
-        self.tokens = orig_tokens
+        self._pos = orig_pos
         return None
 
     def ParseMethodDefs(self):
@@ -1659,15 +1661,15 @@ class DongbeiParser(object):
 
     def ParseStmt(self):
         stmt = self.TryParseStmt()
-        assert stmt, "期望语句，落空了：%s" % (self.tokens[:5],)
+        assert stmt, "期望语句，落空了：%s" % (self._tokens[self._pos:self._pos+5],)
         return stmt
 
     def TryConsumeTokenType(self, tk_type):
-        if not self.tokens:
+        if self._pos >= len(self._tokens):
             return None
-        if self.tokens[0].kind == tk_type:
-            token = self.tokens[0]
-            self.tokens = self.tokens[1:]
+        if self._tokens[self._pos].kind == tk_type:
+            token = self._tokens[self._pos]
+            self._pos += 1
             return token
         return None
 
@@ -1675,28 +1677,28 @@ class DongbeiParser(object):
         tk = self.TryConsumeTokenType(tk_type)
         if tk is None:
             raise Exception(
-                "%s: 期望 %s，实际是 %s" % (self.tokens[0].loc, tk_type, self.tokens[0])
+                "%s: 期望 %s，实际是 %s" % (self._tokens[self._pos].loc, tk_type, self._tokens[self._pos])
             )
         return tk
 
     def TryConsumeToken(self, token):
-        if not self.tokens:
+        if self._pos >= len(self._tokens):
             return None
-        if token != self.tokens[0]:
+        if token != self._tokens[self._pos]:
             return None
-        self.tokens = self.tokens[1:]
+        self._pos += 1
         return token
 
     def ConsumeToken(self, token):
         """Consumes the given token, ignoring token.loc."""
-        if not self.tokens:
+        if self._pos >= len(self._tokens):
             raise Exception(f"{self.loc}: 语句结束太早。")
-        if token != self.tokens[0]:
+        if token != self._tokens[self._pos]:
             raise Exception(
-                "%s: 期望符号 %s，实际却是 %s。" % (self.tokens[0].loc, token, self.tokens[0])
+                "%s: 期望符号 %s，实际却是 %s。" % (self._tokens[self._pos].loc, token, self._tokens[self._pos])
             )
-        found_token = self.tokens[0]
-        self.tokens = self.tokens[1:]
+        found_token = self._tokens[self._pos]
+        self._pos += 1
         return found_token
 
     def ConsumeKeyword(self, keyword):
@@ -1706,20 +1708,20 @@ class DongbeiParser(object):
         """Parses a comma-separated expression list."""
 
         exprs = []
-        tokens_after_expr_list = self.tokens
+        pos_after_expr_list = self._pos
         while True:
             expr = self.TryParseExpr()
-            tokens_after_expr_list = self.tokens
+            pos_after_expr_list = self._pos
             if expr:
                 exprs.append(expr)
             else:
                 # Couldn't parse an expression.
-                self.tokens = tokens_after_expr_list
+                self._pos = pos_after_expr_list
                 return exprs
-            self.tokens = tokens_after_expr_list
+            self._pos = pos_after_expr_list
             comma = self.TryConsumeKeyword(KW_COMMA)
             if not comma:
-                self.tokens = tokens_after_expr_list
+                self._pos = pos_after_expr_list
                 return exprs
 
     # End of class DongbeiParser
@@ -1787,22 +1789,25 @@ def GetPythonVarName(var):
 # Not meant to be in DongbeiParser.
 def ParseExprFromStr(str):
     parser = DongbeiParser()
-    parser.tokens = parser.Tokenize(str, None)
-    return parser.ParseExpr(), parser.tokens
+    parser._tokens = parser.Tokenize(str, None)
+    parser._pos = 0
+    return parser.ParseExpr(), parser._tokens[parser._pos:]
 
 
 # Not meant to be in DongbeiParser.
 def TryParseExprFromStr(str):
     parser = DongbeiParser()
-    parser.tokens = parser.Tokenize(str, None)
-    return parser.TryParseExpr(), parser.tokens
+    parser._tokens = parser.Tokenize(str, None)
+    parser._pos = 0
+    return parser.TryParseExpr(), parser._tokens[parser._pos:]
 
 
 # Not meant to be in DongbeiParser.
 def ParseStmtFromStr(str):
     parser = DongbeiParser()
-    parser.tokens = parser.Tokenize(str, None)
-    return parser.ParseStmt(), parser.tokens
+    parser._tokens = parser.Tokenize(str, None)
+    parser._pos = 0
+    return parser.ParseStmt(), parser._tokens[parser._pos:]
 
 
 def TranslateStatementToPython(stmt, indent=""):
