@@ -1088,6 +1088,7 @@ class DongbeiParser(object):
                     continue
                 else:
                     chars = token.value
+                    loc = token.loc.Clone()  # first char of a new run: snapshot its position
                     continue
             else:
                 if last_last_token.kind == TK_CHAR:

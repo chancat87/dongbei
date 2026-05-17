@@ -1608,6 +1608,16 @@ class DongbeiSourceLocTest(unittest.TestCase):
         expr = ParseExprFromStr("五\n加老王")
         self.assertEqual(expr.operation.loc, SourceLoc("<unknown>", 2, 0))
 
+    def testNumberLiteralLocAfterOp(self):
+        # In "五加六": 五 at col 0, 加 at col 1, 六 at col 2.
+        expr = ParseExprFromStr("五加六")
+        self.assertEqual(expr.op2.token.loc, SourceLoc("<unknown>", 1, 2))
+
+    def testIdentifierLocAfterKeyword(self):
+        # In "翠花，上random。": KW_IMPORT spans cols 0-3, so random starts at col 4.
+        stmt = ParseStmtFromStr("翠花，上random。")
+        self.assertEqual(stmt.value.loc, SourceLoc("<unknown>", 1, 4))
+
 
 if __name__ == "__main__":
     unittest.main()
