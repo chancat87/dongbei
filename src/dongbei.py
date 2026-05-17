@@ -445,8 +445,8 @@ class NegateExpr(Expr):
 
 
 class SubListExpr(Expr):
-    def __init__(self, list, remove_at_head, remove_at_tail):
-        self.list = list
+    def __init__(self, list_expr, remove_at_head, remove_at_tail):
+        self.list = list_expr
         self.remove_at_head = remove_at_head
         self.remove_at_tail = remove_at_tail
 
@@ -546,9 +546,8 @@ def _dongbei_add(a, b):
 
 
 ARITHMETIC_OPERATION_TO_PYTHON = {
-    KW_PLUS: "_dongbei_add",  # 修改这一行，使用我们自定义的加法函数
     KW_MINUS: "-",
-    KW_TIMES: "*", 
+    KW_TIMES: "*",
     KW_DIVIDE_BY: "/",
     KW_INTEGER_DIVIDE_BY: "//",
     KW_MODULO: "%",
@@ -1174,7 +1173,7 @@ class DongbeiParser(object):
         self.tokens = orig_tokens
         expr1 = self.TryParseExpr()
         if expr1:
-            # Code below is fof statements that start with an expression.
+            # Code below is for statements that start with an expression.
 
             # Parse 从...到...磨叽
             from_ = self.TryConsumeKeyword(KW_FROM)
@@ -1240,7 +1239,6 @@ class DongbeiParser(object):
                 return Statement(STMT_EXTEND, (expr1, expr))
 
             # Parse 出溜
-            yield_loc = self.loc
             yield_kw = self.TryConsumeKeyword(KW_YIELD)
             if yield_kw:
                 self.ConsumeKeyword(KW_PERIOD)
