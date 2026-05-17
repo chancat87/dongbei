@@ -1171,7 +1171,8 @@ class DongbeiTest(unittest.TestCase):
         )
 
     def testCommandLine(self):
-        self.assertTrue("dongbei_test.py" in TranslateAndRun("""嘀咕：最高指示。"""))
+        with patch("sys.argv", ["dongbei_test.py", "arg1"]):
+            self.assertTrue("dongbei_test.py" in TranslateAndRun("""嘀咕：最高指示。"""))
 
     def testClassDef(self):
         self.assertEqual(
