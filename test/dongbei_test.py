@@ -1544,5 +1544,16 @@ class DongbeiTest(unittest.TestCase):
         self.assertEqual(["2\n"], list(dongbei.repl()))
 
 
+class DongbeiTokenizerRecursionTest(unittest.TestCase):
+    def testTokenizeLargeInput(self):
+        # BasicTokenize recurses once per token; Python's default limit is ~1000.
+        # A program with 1000+ tokens should not raise RecursionError.
+        code = ("老王是活雷锋。\n" * 400)  # 400 statements * ~3 tokens each ≈ 1200 tokens
+        try:
+            TranslateAndRun(code)
+        except RecursionError:
+            self.fail("BasicTokenize hit Python recursion limit on large input")
+
+
 if __name__ == "__main__":
     unittest.main()

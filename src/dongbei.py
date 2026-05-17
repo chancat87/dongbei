@@ -953,41 +953,43 @@ class DongbeiParser(object):
         """Returns a list of tokens from the dongbei code."""
 
         tokens = []
-        self.SkipWhitespaceAndComment()
-        if not self.code:
-            return tokens
-
-        # Parse 【标识符】.
-        m = re.match("^(【(.*?)】)", self.code)
-        if m:
-            id = re.sub(r"\s+", "", m.group(2))  # Ignore whitespace.
-            tokens.append(IdentifierToken(id, self.loc))
-            self.SkipChars(len(m.group(1)))
-            tokens.extend(self.BasicTokenize())
-            return tokens
-
-        # Try to parse a keyword at the beginning of the code.
-        for keyword in KEYWORDS:
-            kw_loc = self.loc
-            kw = self.TryParseKeyword(keyword)
-            remaining_code = self.code_loc.Clone()
-            if kw:
-                keyword = KEYWORD_TO_NORMALIZED_KEYWORD.get(keyword, keyword)
-                last_token = Keyword(keyword, kw_loc)
-                tokens.append(last_token)
-                if last_token.kind == TK_KEYWORD and last_token.value == KW_OPEN_QUOTE:
-                    self.code_loc = remaining_code
-                    tokens.extend(self.TokenizeStringLiteralAndRest())
-                else:
-                    self.code_loc = remaining_code
-                    self.SkipWhitespace()
-                    tokens.extend(self.BasicTokenize())
+        while True:
+            self.SkipWhitespaceAndComment()
+            if not self.code:
                 return tokens
 
-        tokens.append(Token(TK_CHAR, self.code[0], self.loc))
-        self.SkipChar()
-        tokens.extend(self.BasicTokenize())
-        return tokens
+            # Parse 【标识符】.
+            m = re.match("^(【(.*?)】)", self.code)
+            if m:
+                id = re.sub(r"\s+", "", m.group(2))  # Ignore whitespace.
+                tokens.append(IdentifierToken(id, self.loc))
+                self.SkipChars(len(m.group(1)))
+                continue
+
+            # Try to parse a keyword at the beginning of the code.
+            matched_keyword = False
+            for keyword in KEYWORDS:
+                kw_loc = self.loc
+                kw = self.TryParseKeyword(keyword)
+                remaining_code = self.code_loc.Clone()
+                if kw:
+                    keyword = KEYWORD_TO_NORMALIZED_KEYWORD.get(keyword, keyword)
+                    last_token = Keyword(keyword, kw_loc)
+                    tokens.append(last_token)
+                    if last_token.kind == TK_KEYWORD and last_token.value == KW_OPEN_QUOTE:
+                        self.code_loc = remaining_code
+                        tokens.extend(self.TokenizeStringLiteralAndRest())
+                    else:
+                        self.code_loc = remaining_code
+                        self.SkipWhitespace()
+                    matched_keyword = True
+                    break
+
+            if matched_keyword:
+                continue
+
+            tokens.append(Token(TK_CHAR, self.code[0], self.loc))
+            self.SkipChar()
 
     def Tokenize(self, code, src_file):
         self.code_loc.code = code
