@@ -27,8 +27,12 @@ src/dongbei.py
 # 跑全部测试（单元测试 + 所有 demo）
 bash test/test_all
 
-# 只跑单元测试
-python3 -m unittest test/dongbei_test
+# 只跑单元测试（所有 *_test.py）
+python3 -m unittest discover -s test -p "*_test.py"
+
+# 只跑某个测试文件
+python3 -m unittest test.dongbei_test
+python3 -m unittest test.dongbei_add_test
 
 # 跑单个测试类或测试方法
 python3 -m unittest test.dongbei_test.DongbeiParseExprTest
