@@ -432,18 +432,18 @@ class Expr:
 
     def equals(self, other):
         """Returns true if self and other (which is guaranteed to have the same type) are equal."""
-        raise Exception("%s must implement equals()." % (type(self),))
+        raise Exception("%s 这货没整 equals()，这不行啊！" % (type(self),))
 
     def __ne__(self, other):
         return not (self == other)
 
     def to_dongbei(self):
         """Returns the dongbei code for this expression."""
-        raise Exception(f"{type(self)} must implement to_dongbei().")
+        raise Exception(f"{type(self)} 这货没整 to_dongbei()，咋跟它唠嗑啊！")
 
     def to_python(self):
         """Translates this expression to Python."""
-        raise Exception("%s must implement to_python()." % (type(self),))
+        raise Exception("%s 这货没整 to_python()，程序没法跑！" % (type(self),))
 
 
 def _dongbei_repr(value):
@@ -682,7 +682,7 @@ class LiteralExpr(Expr):
             return "“%s”" % (self.token.value,)
         if self.token.kind == TK_NONE_LITERAL:
             return KW_IS_NONE
-        raise Exception("Unexpected token kind %s" % (self.token.kind,))
+        raise Exception("见鬼了，不认识这 token：%s" % (self.token.kind,))
 
     def to_python(self):
         if self.token.kind == TK_NUMBER_LITERAL:
@@ -691,7 +691,7 @@ class LiteralExpr(Expr):
             return '"%s"' % (self.token.value,)
         if self.token.kind == TK_NONE_LITERAL:
             return "None"
-        raise Exception("Unexpected token kind %s" % (self.token.kind,))
+        raise Exception("见鬼了，不认识这 token：%s" % (self.token.kind,))
 
 
 class TupleExpr(Expr):
@@ -1341,7 +1341,7 @@ class _DongbeiLexer(_LarkLexer):
             if dk_tok.kind == TK_KEYWORD:
                 terminal = _KW_VALUE_TO_TERMINAL.get(dk_tok.value)
                 if terminal is None:
-                    raise ValueError(f"Unknown keyword token: {dk_tok}")
+                    raise ValueError(f"这关键字咱不认识：{dk_tok}，整啥呢？")
                 yield lark.Token(terminal, dk_tok)
             elif dk_tok.kind == TK_IDENTIFIER:
                 yield lark.Token("IDENTIFIER", dk_tok)
@@ -1350,7 +1350,7 @@ class _DongbeiLexer(_LarkLexer):
             elif dk_tok.kind == TK_STRING_LITERAL:
                 yield lark.Token("STRING_LITERAL", dk_tok)
             else:
-                raise ValueError(f"Unexpected token kind in parser input: {dk_tok}")
+                raise ValueError(f"解析器这儿整了个不认识的 token，整叉劈了：{dk_tok}")
 
 
 def _loc():
@@ -2091,7 +2091,7 @@ def dongbei_cli(argv):
                     os.scandir(os.path.join(curr_src_base, "../demo")),
                 )
             )
-            print("所有案例：")
+            print("俺这儿有这些案例，挑一个试试：")
             for i in range(0, len(all_examples), EXAMPLE_GROUP_SIZE):
                 print(", ".join(all_examples[i : i + EXAMPLE_GROUP_SIZE]))
             sys.exit(1)
@@ -2102,7 +2102,7 @@ def dongbei_cli(argv):
 
     with io.open(program, "r", encoding="utf-8") as src_file:
         if FLAGS.xudao:
-            print(f"执行 {program} ...")
+            print(f"整上 {program} 喽……")
         try:
             translate_and_run(src_file.read(), src_file=program, xudao=FLAGS.xudao)
         except Exception as e:
