@@ -64,17 +64,17 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
 
         # 测试基本的字符串和数字加法
         code = f'唠唠：{OQ}结果：{CQ}加42。'
-        output = TranslateAndRun(code, "test_string_number_concat")
+        output = translate_and_run(code, "test_string_number_concat")
         self.assertIn("结果：42", output)
 
         # 测试数字和字符串加法
         code = f'唠唠：100加{OQ}分{CQ}。'
-        output = TranslateAndRun(code, "test_number_string_concat")
+        output = translate_and_run(code, "test_number_string_concat")
         self.assertIn("100分", output)
 
         # 测试多个拼接
         code = f'唠唠：{OQ}第{CQ}加1加{OQ}名{CQ}。'
-        output = TranslateAndRun(code, "test_multiple_concat")
+        output = translate_and_run(code, "test_multiple_concat")
         self.assertIn("第1名", output)
 
     def test_real_world_scenario(self):
@@ -88,12 +88,12 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
             f'老王装老王加{OQ} 牛逼{CQ}。\n'
             f'唠唠：老王。'
         )
-        output = TranslateAndRun(code, "test_real_world")
+        output = translate_and_run(code, "test_real_world")
         self.assertIn("a13 牛逼", output)
 
     def test_arithmetic_operation_mapping(self):
         """测试算术运算映射是否正确"""
-        # 加法由 ArithmeticExpr.ToPython() 特殊处理，不在 ARITHMETIC_OPERATION_TO_PYTHON 里
+        # 加法由 ArithmeticExpr.to_python() 特殊处理，不在 ARITHMETIC_OPERATION_TO_PYTHON 里
         self.assertNotIn(KW_PLUS, ARITHMETIC_OPERATION_TO_PYTHON)
 
         # 确保其他运算不受影响
@@ -106,21 +106,21 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
         # 测试加法表达式翻译
         expr = ArithmeticExpr(
             LiteralExpr(Token(TK_STRING_LITERAL, "a", None)),
-            Keyword(KW_PLUS, None),
+            keyword(KW_PLUS, None),
             LiteralExpr(Token(TK_NUMBER_LITERAL, 1, None))
         )
 
-        python_code = expr.ToPython()
+        python_code = expr.to_python()
         self.assertEqual(python_code, '_dongbei_add("a", 1)')
 
         # 测试其他运算不受影响
         expr = ArithmeticExpr(
             LiteralExpr(Token(TK_NUMBER_LITERAL, 5, None)),
-            Keyword(KW_MINUS, None),
+            keyword(KW_MINUS, None),
             LiteralExpr(Token(TK_NUMBER_LITERAL, 3, None))
         )
 
-        python_code = expr.ToPython()
+        python_code = expr.to_python()
         self.assertEqual(python_code, "5 - 3")
 
     def test_complex_concatenation_scenarios(self):
@@ -134,7 +134,7 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
             f'【结果】装{OQ}分数：{CQ}加95加{OQ}分，等级：{CQ}加{OQ}A{CQ}。\n'
             f'唠唠：【结果】。'
         )
-        output = TranslateAndRun(code, "test_complex_concat")
+        output = translate_and_run(code, "test_complex_concat")
         self.assertIn("分数：95分，等级：A", output)
 
         # 测试在循环中的拼接
@@ -143,7 +143,7 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
             f'    唠唠：{OQ}第{CQ}加老二加{OQ}次循环{CQ}。\n'
             f'磨叽完了。'
         )
-        output = TranslateAndRun(code, "test_loop_concat")
+        output = translate_and_run(code, "test_loop_concat")
         self.assertIn("第1次循环", output)
         self.assertIn("第2次循环", output)
         self.assertIn("第3次循环", output)
@@ -154,7 +154,7 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
 唠唠：1加2。
 唠唠：3.5加2.5。
 """
-        output = TranslateAndRun(code, "test_backwards_compat")
+        output = translate_and_run(code, "test_backwards_compat")
         # 纯数字加法应该仍然是数学加法
         self.assertIn("3", output)  # 1+2=3
         self.assertIn("6.0", output)  # 3.5+2.5=6.0

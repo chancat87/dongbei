@@ -337,7 +337,7 @@ class SourceLoc:
         self.line = line
         self.column = column
 
-    def Advance(self, string):
+    def advance(self, string):
         """Moves the location forward by skipping the given string."""
 
         for char in string:
@@ -347,7 +347,7 @@ class SourceLoc:
             else:
                 self.column += 1
 
-    def Clone(self):
+    def clone(self):
         return SourceLoc(self.filepath, self.line, self.column)
 
     def __str__(self):
@@ -371,21 +371,21 @@ class SourceCodeAndLoc:
     def __init__(self, code, loc):
         self.code = code or ""
         if loc:
-            self.loc = loc.Clone()
+            self.loc = loc.clone()
         else:
             self.loc = SourceLoc()
 
-    def Clone(self):
-        return SourceCodeAndLoc(self.code, self.loc.Clone())
+    def clone(self):
+        return SourceCodeAndLoc(self.code, self.loc.clone())
 
-    def SkipChar(self):
+    def skip_char(self):
         assert self.code
-        self.loc.Advance(self.code[0])
+        self.loc.advance(self.code[0])
         self.code = self.code[1:]
 
-    def SkipChars(self, num):
+    def skip_chars(self, num):
         for x in range(num):
-            self.SkipChar()
+            self.skip_char()
 
 
 class Token:
@@ -393,7 +393,7 @@ class Token:
         self.kind = kind
         self.value = value
         if loc:
-            self.loc = loc.Clone()  # a SourceLoc
+            self.loc = loc.clone()  # a SourceLoc
         else:
             self.loc = SourceLoc()
 
@@ -415,7 +415,7 @@ class Token:
         return not (self == other)
 
 
-def IdentifierToken(name, loc):
+def identifier_token(name, loc):
     return Token(TK_IDENTIFIER, name, loc)
 
 
@@ -428,22 +428,22 @@ class Expr:
 
     def __eq__(self, other):
         # Strict type check: a subclass expr is not equal to its parent even if fields match.
-        return type(self) == type(other) and self.Equals(other)
+        return type(self) == type(other) and self.equals(other)
 
-    def Equals(self, other):
+    def equals(self, other):
         """Returns true if self and other (which is guaranteed to have the same type) are equal."""
-        raise Exception("%s must implement Equals()." % (type(self),))
+        raise Exception("%s must implement equals()." % (type(self),))
 
     def __ne__(self, other):
         return not (self == other)
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         """Returns the dongbei code for this expression."""
-        raise Exception(f"{type(self)} must implement ToDongbei().")
+        raise Exception(f"{type(self)} must implement to_dongbei().")
 
-    def ToPython(self):
+    def to_python(self):
         """Translates this expression to Python."""
-        raise Exception("%s must implement ToPython()." % (type(self),))
+        raise Exception("%s must implement to_python()." % (type(self),))
 
 
 def _dongbei_repr(value):
@@ -475,15 +475,15 @@ class ConcatExpr(Expr):
     def __str__(self):
         return "CONCAT_EXPR<%s>" % (self.exprs,)
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.exprs == other.exprs
 
-    def ToDongbei(self):
-        return KW_CONCAT.join(expr.ToDongbei() for expr in self.exprs)
+    def to_dongbei(self):
+        return KW_CONCAT.join(expr.to_dongbei() for expr in self.exprs)
 
-    def ToPython(self):
+    def to_python(self):
         return " + ".join(
-            "_dongbei_str(%s)" % (expr.ToPython(),) for expr in self.exprs
+            "_dongbei_str(%s)" % (expr.to_python(),) for expr in self.exprs
         )
 
 
@@ -494,14 +494,14 @@ class LengthExpr(Expr):
     def __str__(self):
         return f"LENGTH<{self.expr}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.expr == other.expr
 
-    def ToDongbei(self):
-        return f"{self.expr.ToDongbei()}{KW_LENGTH}"
+    def to_dongbei(self):
+        return f"{self.expr.to_dongbei()}{KW_LENGTH}"
 
-    def ToPython(self):
-        return f"len({self.expr.ToPython()})"
+    def to_python(self):
+        return f"len({self.expr.to_python()})"
 
 
 class NegateExpr(Expr):
@@ -511,15 +511,15 @@ class NegateExpr(Expr):
     def __str__(self):
         return f"NEGATE<{self.expr}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.expr == other.expr
 
-    def ToDongbei(self):
-        code = self.expr.ToDongbei()
+    def to_dongbei(self):
+        code = self.expr.to_dongbei()
         return f"{KW_NEGATE} {code}"
 
-    def ToPython(self):
-        code = self.expr.ToPython()
+    def to_python(self):
+        code = self.expr.to_python()
         return f"-({code})"
 
 
@@ -532,25 +532,25 @@ class SubListExpr(Expr):
     def __str__(self):
         return f"SUBLIST<{self.list}, {self.remove_at_head}, {self.remove_at_tail}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return (
             self.list == other.list
             and self.remove_at_head == other.remove_at_head
             and self.remove_at_tail == other.remove_at_tail
         )
 
-    def ToDongbei(self):
-        code = self.list.ToDongbei()
+    def to_dongbei(self):
+        code = self.list.to_dongbei()
         if self.remove_at_head:
             code += KW_REMOVE_HEAD
         if self.remove_at_tail:
             code += KW_REMOVE_TAIL
         return code
 
-    def ToPython(self):
+    def to_python(self):
         start_index = 1 if self.remove_at_head else 0
         end_index = -1 if self.remove_at_tail else None
-        return f"({self.list.ToPython()})[{start_index} : {end_index}]"
+        return f"({self.list.to_python()})[{start_index} : {end_index}]"
 
 
 class IndexExpr(Expr):
@@ -561,16 +561,16 @@ class IndexExpr(Expr):
     def __str__(self):
         return f"INDEX_EXPR<{self.list_expr}, {self.index_expr}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.list_expr == other.list_expr and self.index_expr == other.index_expr
 
-    def ToDongbei(self):
-        list_expr = self.list_expr.ToDongbei()
-        index_expr = self.index_expr.ToDongbei()
+    def to_dongbei(self):
+        list_expr = self.list_expr.to_dongbei()
+        index_expr = self.index_expr.to_dongbei()
         return f"{list_expr}{KW_INDEX}{index_expr}"
 
-    def ToPython(self):
-        return f"({self.list_expr.ToPython()})[({self.index_expr.ToPython()}) - 1]"
+    def to_python(self):
+        return f"({self.list_expr.to_python()})[({self.index_expr.to_python()}) - 1]"
 
 
 class ObjectPropertyExpr(Expr):
@@ -581,17 +581,17 @@ class ObjectPropertyExpr(Expr):
     def __str__(self):
         return f"PROPERTY_EXPR<{self.object}, {self.property}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.object == other.object and self.property == other.property
 
-    def ToDongbei(self):
-        obj = self.object.ToDongbei()
+    def to_dongbei(self):
+        obj = self.object.to_dongbei()
         prop = f"【{self.property.value}】"
         return f"{obj}{KW_DOT}{prop}"
 
-    def ToPython(self):
-        obj = self.object.ToPython()
-        prop = GetPythonVarName(self.property.value)
+    def to_python(self):
+        obj = self.object.to_python()
+        prop = get_python_var_name(self.property.value)
         return f"({obj}).{prop}"
 
 
@@ -603,17 +603,17 @@ class MethodCallExpr(Expr):
     def __str__(self):
         return f"METHOD_CALL_EXPR<{self.object}, {self.call_expr}>"
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.object == other.object and self.call_expr == other.call_expr
 
-    def ToDongbei(self):
-        obj = self.object.ToDongbei()
-        call = self.call_expr.ToDongbei()
+    def to_dongbei(self):
+        obj = self.object.to_dongbei()
+        call = self.call_expr.to_dongbei()
         return obj + call
 
-    def ToPython(self):
-        obj = self.object.ToPython()
-        call = self.call_expr.ToPython()
+    def to_python(self):
+        obj = self.object.to_python()
+        call = self.call_expr.to_python()
         return f"({obj}).{call}"
 
 
@@ -642,26 +642,26 @@ class ArithmeticExpr(Expr):
     def __str__(self):
         return "ARITHMETIC_EXPR<%s, %s, %s>" % (self.op1, self.operation, self.op2)
 
-    def Equals(self, other):
+    def equals(self, other):
         return (
             self.op1 == other.op1
             and self.operation == other.operation
             and self.op2 == other.op2
         )
 
-    def ToDongbei(self):
-        return f"{self.op1.ToDongbei()}{self.operation.value}{self.op2.ToDongbei()}"
+    def to_dongbei(self):
+        return f"{self.op1.to_dongbei()}{self.operation.value}{self.op2.to_dongbei()}"
 
-    def ToPython(self):
+    def to_python(self):
         if self.operation.value == KW_PLUS:
             # 对于加法，使用我们自定义的_dongbei_add函数
-            return "_dongbei_add(%s, %s)" % (self.op1.ToPython(), self.op2.ToPython())
+            return "_dongbei_add(%s, %s)" % (self.op1.to_python(), self.op2.to_python())
         else:
             # 其他运算保持原样
             return "%s %s %s" % (
-                self.op1.ToPython(),
+                self.op1.to_python(),
                 ARITHMETIC_OPERATION_TO_PYTHON[self.operation.value],
-                self.op2.ToPython(),
+                self.op2.to_python(),
             )
 
 
@@ -672,10 +672,10 @@ class LiteralExpr(Expr):
     def __str__(self):
         return "LITERAL_EXPR<%s>" % (self.token,)
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.token == other.token
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         if self.token.kind == TK_NUMBER_LITERAL:
             return str(self.token.value)
         if self.token.kind == TK_STRING_LITERAL:
@@ -684,7 +684,7 @@ class LiteralExpr(Expr):
             return KW_IS_NONE
         raise Exception("Unexpected token kind %s" % (self.token.kind,))
 
-    def ToPython(self):
+    def to_python(self):
         if self.token.kind == TK_NUMBER_LITERAL:
             return str(self.token.value)
         if self.token.kind == TK_STRING_LITERAL:
@@ -701,25 +701,25 @@ class TupleExpr(Expr):
     def __str__(self):
         return "TUPLE_EXPR<%s>" % (self.tuple,)
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.tuple == other.tuple
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         if not self.tuple:
             return KW_TUPLE
 
         return (
-            KW_COMPARE_WITH.join(field.ToDongbei() for field in self.tuple) + KW_TUPLE
+            KW_COMPARE_WITH.join(field.to_dongbei() for field in self.tuple) + KW_TUPLE
         )
 
-    def ToPython(self):
+    def to_python(self):
         if len(self.tuple) == 1:
-            return f"({self.tuple[0].ToPython()},)"
+            return f"({self.tuple[0].to_python()},)"
 
-        return "(%s)" % (", ".join(field.ToPython() for field in self.tuple))
+        return "(%s)" % (", ".join(field.to_python() for field in self.tuple))
 
 
-def NumberLiteralExpr(value, loc):
+def number_literal_expr(value, loc):
     return LiteralExpr(Token(TK_NUMBER_LITERAL, value, loc))
 
 
@@ -730,14 +730,14 @@ class VariableExpr(Expr):
     def __str__(self):
         return "VARIABLE_EXPR<%s>" % (self.var,)
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.var == other.var
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         return f"【{self.var}】"
 
-    def ToPython(self):
-        return GetPythonVarName(self.var)
+    def to_python(self):
+        return get_python_var_name(self.var)
 
 
 class ParenExpr(Expr):
@@ -747,14 +747,14 @@ class ParenExpr(Expr):
     def __str__(self):
         return "PAREN_EXPR<%s>" % (self.expr,)
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.expr == other.expr
 
-    def ToDongbei(self):
-        return f"（{self.expr.ToDongbei()}）"
+    def to_dongbei(self):
+        return f"（{self.expr.to_dongbei()}）"
 
-    def ToPython(self):
-        return "(%s)" % (self.expr.ToPython(),)
+    def to_python(self):
+        return "(%s)" % (self.expr.to_python(),)
 
 
 class CallExpr(Expr):
@@ -768,19 +768,19 @@ class CallExpr(Expr):
             ", ".join(str(arg) for arg in self.args),
         )
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.func == other.func and self.args == other.args
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         code = f"{KW_CALL}{self.func}"
         if self.args:
-            code += "（" + "，".join(arg.ToDongbei() for arg in self.args) + "）"
+            code += "（" + "，".join(arg.to_dongbei() for arg in self.args) + "）"
         return code
 
-    def ToPython(self):
+    def to_python(self):
         return "%s(%s)" % (
-            GetPythonVarName(self.func),
-            ", ".join(arg.ToPython() for arg in self.args),
+            get_python_var_name(self.func),
+            ", ".join(arg.to_python() for arg in self.args),
         )
 
 
@@ -795,19 +795,19 @@ class NewObjectExpr(Expr):
             ", ".join(str(arg) for arg in self.args),
         )
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.class_id == other.class_id and self.args == other.args
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         code = f"{self.class_id.value}{KW_NEW_OBJECT_OF}"
         if self.args:
-            code += "（" + "，".join(arg.ToDongbei() for arg in self.args) + "）"
+            code += "（" + "，".join(arg.to_dongbei() for arg in self.args) + "）"
         return code
 
-    def ToPython(self):
+    def to_python(self):
         return "%s(%s)" % (
-            GetPythonVarName(self.class_id.value),
-            ", ".join(arg.ToPython() for arg in self.args),
+            get_python_var_name(self.class_id.value),
+            ", ".join(arg.to_python() for arg in self.args),
         )
 
 
@@ -818,18 +818,18 @@ class ListExpr(Expr):
     def __str__(self):
         return "LIST(%s)" % (", ".join(str(expr) for expr in self.exprs))
 
-    def Equals(self, other):
+    def equals(self, other):
         return self.exprs == other.exprs
 
-    def ToDongbei(self):
+    def to_dongbei(self):
         return (
             KW_OPEN_BRACKET
-            + "，".join(expr.ToDongbei() for expr in self.exprs)
+            + "，".join(expr.to_dongbei() for expr in self.exprs)
             + KW_CLOSE_BRACKET
         )
 
-    def ToPython(self):
-        return "[%s]" % (", ".join(expr.ToPython() for expr in self.exprs))
+    def to_python(self):
+        return "[%s]" % (", ".join(expr.to_python() for expr in self.exprs))
 
 
 # Maps a dongbei comparison keyword to the Python version.
@@ -850,30 +850,30 @@ class ComparisonExpr(Expr):
     def __str__(self):
         return "COMPARISON_EXPR(%s, %s, %s)" % (self.op1, self.relation, self.op2)
 
-    def Equals(self, other):
+    def equals(self, other):
         return (
             self.op1 == other.op1
             and self.relation == other.relation
             and self.op2 == other.op2
         )
 
-    def ToDongbei(self):
-        code = self.op1.ToDongbei()
+    def to_dongbei(self):
+        code = self.op1.to_dongbei()
         if self.relation.value == KW_IS_NONE:
             return code + KW_IS_NONE
         if self.relation.value in (KW_GREATER, KW_LESS):
             connector = KW_COMPARE
         else:
             connector = KW_COMPARE_WITH
-        return code + connector + self.op2.ToDongbei() + self.relation.value
+        return code + connector + self.op2.to_dongbei() + self.relation.value
 
-    def ToPython(self):
+    def to_python(self):
         if self.relation.value == KW_IS_NONE:
-            return f"({self.op1.ToPython()}) is None"
+            return f"({self.op1.to_python()}) is None"
         return "%s %s %s" % (
-            self.op1.ToPython(),
+            self.op1.to_python(),
             COMPARISON_KEYWORD_TO_PYTHON[self.relation.value],
-            self.op2.ToPython(),
+            self.op2.to_python(),
         )
 
 
@@ -900,7 +900,7 @@ class Statement:
         return not (self == other)
 
 
-def Keyword(str, loc):
+def keyword(str, loc):
     """Returns a keyword token whose value is the given string."""
     return Token(TK_KEYWORD, str, loc)
 
@@ -924,7 +924,7 @@ CHINESE_DIGITS = {
 }
 
 
-def TryParseNumber(str):
+def try_parse_number(str):
     """Returns (number, remainder)."""
 
     m = re.match(r"^(-?[0-9]+(\.[0-9]*)?)(.*)", str)
@@ -940,15 +940,15 @@ def TryParseNumber(str):
     return None, str
 
 
-def TokenizeStrContainingNoKeyword(chars, loc):
+def tokenize_str_containing_no_keyword(chars, loc):
     """Returns a list of tokens."""
     tokens = []
-    number, rest = TryParseNumber(chars)
+    number, rest = try_parse_number(chars)
     if number is not None:
         tokens.append(Token(TK_NUMBER_LITERAL, number, loc))
-        tokens.extend(TokenizeStrContainingNoKeyword(rest, loc))
+        tokens.extend(tokenize_str_containing_no_keyword(rest, loc))
     elif rest:
-        tokens.append(IdentifierToken(rest, loc))
+        tokens.append(identifier_token(rest, loc))
     return tokens
 
 
@@ -965,72 +965,72 @@ class DongbeiParser(object):
     def loc(self):
         return self.code_loc.loc
 
-    def SkipChar(self):
-        self.code_loc.SkipChar()
+    def skip_char(self):
+        self.code_loc.skip_char()
 
-    def SkipChars(self, num):
+    def skip_chars(self, num):
         for x in range(num):
-            self.SkipChar()
+            self.skip_char()
 
-    def SkipWhitespace(self):
+    def skip_whitespace(self):
         """If the next char is a whitespace, skips it and returns True."""
 
         if self.code and self.code[0].isspace():
-            self.SkipChar()
+            self.skip_char()
             return True
         return False
 
-    def SkipLine(self):
+    def skip_line(self):
         while self.code and self.code[0] != "\n":
-            self.SkipChar()
+            self.skip_char()
         if self.code and self.code[0] == "\n":
-            self.SkipChar()
+            self.skip_char()
 
-    def SkipWhitespaceAndComment(self):
+    def skip_whitespace_and_comment(self):
         while True:
-            old_loc = self.loc.Clone()
-            while self.SkipWhitespace():
+            old_loc = self.loc.clone()
+            while self.skip_whitespace():
                 pass
             if self.code.startswith("#"):  # comment
-                self.SkipLine()
+                self.skip_line()
             if self.loc == old_loc:  # cannot skip any further.
                 return
 
-    def TokenizeStringLiteralAndRest(self):
+    def tokenize_string_literal_and_rest(self):
         """Returns a list of tokens."""
 
         tokens = []
-        loc = self.loc.Clone()
+        loc = self.loc.clone()
         close_quote_pos = self.code.find(KW_CLOSE_QUOTE)
         if close_quote_pos < 0:
             tokens.append(Token(TK_NON_TERMINATING_STRING_LITERAL, self.code, loc))
-            self.SkipChars(len(self.code))
+            self.skip_chars(len(self.code))
             return tokens
 
         tokens.append(Token(TK_STRING_LITERAL, self.code[:close_quote_pos], loc))
-        self.SkipChars(close_quote_pos)
-        tokens.append(Keyword(KW_CLOSE_QUOTE, self.loc))
-        self.SkipChars(len(KW_CLOSE_QUOTE))
-        tokens.extend(self.BasicTokenize())
+        self.skip_chars(close_quote_pos)
+        tokens.append(keyword(KW_CLOSE_QUOTE, self.loc))
+        self.skip_chars(len(KW_CLOSE_QUOTE))
+        tokens.extend(self.basic_tokenize())
         return tokens
 
-    def TryParseKeyword(self, keyword):
+    def try_parse_keyword(self, kw):
         """Returns (parsed keyword string, remaining code)."""
-        orig_code_loc = self.code_loc.Clone()
-        for char in keyword:
-            self.SkipWhitespaceAndComment()
+        orig_code_loc = self.code_loc.clone()
+        for char in kw:
+            self.skip_whitespace_and_comment()
             if not self.code.startswith(char):
                 self.code_loc = orig_code_loc
                 return None
-            self.SkipChar()
-        return keyword
+            self.skip_char()
+        return kw
 
-    def BasicTokenize(self):
+    def basic_tokenize(self):
         """Returns a list of tokens from the dongbei code."""
 
         tokens = []
         while True:
-            self.SkipWhitespaceAndComment()
+            self.skip_whitespace_and_comment()
             if not self.code:
                 return tokens
 
@@ -1038,26 +1038,26 @@ class DongbeiParser(object):
             m = re.match("^(【(.*?)】)", self.code)
             if m:
                 id = re.sub(r"\s+", "", m.group(2))  # Ignore whitespace.
-                tokens.append(IdentifierToken(id, self.loc))
-                self.SkipChars(len(m.group(1)))
+                tokens.append(identifier_token(id, self.loc))
+                self.skip_chars(len(m.group(1)))
                 continue
 
             # Try to parse a keyword at the beginning of the code.
             matched_keyword = False
-            for keyword in KEYWORDS:
-                kw_loc = self.loc.Clone()
-                kw = self.TryParseKeyword(keyword)
-                remaining_code = self.code_loc.Clone()
+            for kw_str in KEYWORDS:
+                kw_loc = self.loc.clone()
+                kw = self.try_parse_keyword(kw_str)
+                remaining_code = self.code_loc.clone()
                 if kw:
-                    keyword = KEYWORD_TO_NORMALIZED_KEYWORD.get(keyword, keyword)
-                    last_token = Keyword(keyword, kw_loc)
+                    kw_str = KEYWORD_TO_NORMALIZED_KEYWORD.get(kw_str, kw_str)
+                    last_token = keyword(kw_str, kw_loc)
                     tokens.append(last_token)
                     if last_token.kind == TK_KEYWORD and last_token.value == KW_OPEN_QUOTE:
                         self.code_loc = remaining_code
-                        tokens.extend(self.TokenizeStringLiteralAndRest())
+                        tokens.extend(self.tokenize_string_literal_and_rest())
                     else:
                         self.code_loc = remaining_code
-                        self.SkipWhitespace()
+                        self.skip_whitespace()
                     matched_keyword = True
                     break
 
@@ -1065,20 +1065,20 @@ class DongbeiParser(object):
                 continue
 
             tokens.append(Token(TK_CHAR, self.code[0], self.loc))
-            self.SkipChar()
+            self.skip_char()
 
-    def Tokenize(self, code, src_file):
+    def tokenize(self, code, src_file):
         self.code_loc.code = code
         self.code_loc.loc = SourceLoc(filepath=src_file if src_file is not None else "<unknown>")
-        return self._Tokenize()
+        return self._tokenize()
 
-    def _Tokenize(self):
+    def _tokenize(self):
         """Tokenizes self.code into tokens."""
         tokens = []
         last_token = Token(None, None, None)
-        loc = self.loc.Clone()
+        loc = self.loc.clone()
         chars = ""
-        for token in self.BasicTokenize():
+        for token in self.basic_tokenize():
             last_last_token = last_token
             last_token = token
             if token.kind == TK_CHAR:
@@ -1087,18 +1087,18 @@ class DongbeiParser(object):
                     continue
                 else:
                     chars = token.value
-                    loc = token.loc.Clone()  # first char of a new run: snapshot its position
+                    loc = token.loc.clone()  # first char of a new run: snapshot its position
                     continue
             else:
                 if last_last_token.kind == TK_CHAR:
                     # A sequence of consecutive TK_CHARs ended.
-                    tokens.extend(TokenizeStrContainingNoKeyword(chars, loc))
+                    tokens.extend(tokenize_str_containing_no_keyword(chars, loc))
                 tokens.append(token)
                 chars = ""
-        tokens.extend(TokenizeStrContainingNoKeyword(chars, loc))
+        tokens.extend(tokenize_str_containing_no_keyword(chars, loc))
         return tokens
 
-    def TranslateTokensToStatements(self, tokens):
+    def translate_tokens_to_statements(self, tokens):
         tree = _lark_parser.parse(tokens, start="start")
         return _lark_transformer.transform(tree)
 
@@ -1438,7 +1438,7 @@ class _DongbeiTransformer(lark.Transformer):
     def loop_stmt(self, items):
         var_expr, from_expr, to_expr = items[0], items[1], items[2]
         stmts = list(items[3:])
-        step_expr = NumberLiteralExpr(1, _loc())  # synthesised constant — no source token
+        step_expr = number_literal_expr(1, _loc())  # synthesised constant — no source token
         return Statement(STMT_LOOP, (var_expr, from_expr, to_expr, step_expr, stmts))
 
     def step_loop_stmt(self, items):
@@ -1475,7 +1475,7 @@ class _DongbeiTransformer(lark.Transformer):
     def inc_stmt(self, items):
         # items: [expr, KW_INC token]
         assert self._dk(items[1]).value == KW_INC
-        return Statement(STMT_INC_BY, (items[0], NumberLiteralExpr(1, self._dk(items[1]).loc)))
+        return Statement(STMT_INC_BY, (items[0], number_literal_expr(1, self._dk(items[1]).loc)))
 
     def inc_by_stmt(self, items):
         return Statement(STMT_INC_BY, (items[0], items[1]))
@@ -1483,7 +1483,7 @@ class _DongbeiTransformer(lark.Transformer):
     def dec_stmt(self, items):
         # items: [expr, KW_DEC token]
         assert self._dk(items[1]).value == KW_DEC
-        return Statement(STMT_DEC_BY, (items[0], NumberLiteralExpr(1, self._dk(items[1]).loc)))
+        return Statement(STMT_DEC_BY, (items[0], number_literal_expr(1, self._dk(items[1]).loc)))
 
     def dec_by_stmt(self, items):
         return Statement(STMT_DEC_BY, (items[0], items[1]))
@@ -1510,14 +1510,14 @@ class _DongbeiTransformer(lark.Transformer):
     def method_def_no_params(self, items):
         func_tok = self._dk(items[0])
         stmts = list(items[1:])
-        params = [IdentifierToken(ID_SELF, _loc())]  # implicit self — no source token
+        params = [identifier_token(ID_SELF, _loc())]  # implicit self — no source token
         return Statement(STMT_FUNC_DEF, (func_tok, params, stmts))
 
     def method_def_with_params(self, items):
         func_tok = self._dk(items[0])
         params = items[1]   # list from param_list
         stmts = list(items[2:])
-        all_params = [IdentifierToken(ID_SELF, _loc())] + params  # implicit self — no source token
+        all_params = [identifier_token(ID_SELF, _loc())] + params  # implicit self — no source token
         return Statement(STMT_FUNC_DEF, (func_tok, all_params, stmts))
 
     def param_list(self, items):
@@ -1533,27 +1533,27 @@ class _DongbeiTransformer(lark.Transformer):
     def comp_greater(self, items):
         # items: [left_expr, right_expr, KW_GREATER token]
         assert self._dk(items[2]).value == KW_GREATER
-        return ComparisonExpr(items[0], Keyword(KW_GREATER, self._dk(items[2]).loc), items[1])
+        return ComparisonExpr(items[0], keyword(KW_GREATER, self._dk(items[2]).loc), items[1])
 
     def comp_less(self, items):
         # items: [left_expr, right_expr, KW_LESS token]
         assert self._dk(items[2]).value == KW_LESS
-        return ComparisonExpr(items[0], Keyword(KW_LESS, self._dk(items[2]).loc), items[1])
+        return ComparisonExpr(items[0], keyword(KW_LESS, self._dk(items[2]).loc), items[1])
 
     def comp_is_none(self, items):
         # items: [left_expr, KW_IS_NONE token]
         assert self._dk(items[1]).value == KW_IS_NONE
-        return ComparisonExpr(items[0], Keyword(KW_IS_NONE, self._dk(items[1]).loc), None)
+        return ComparisonExpr(items[0], keyword(KW_IS_NONE, self._dk(items[1]).loc), None)
 
     def comp_eq(self, items):
         # items: [left_expr, right_expr, KW_EQUAL token]
         assert self._dk(items[2]).value == KW_EQUAL
-        return ComparisonExpr(items[0], Keyword(KW_EQUAL, self._dk(items[2]).loc), items[1])
+        return ComparisonExpr(items[0], keyword(KW_EQUAL, self._dk(items[2]).loc), items[1])
 
     def comp_neq(self, items):
         # items: [left_expr, right_expr, KW_NOT_EQUAL token]
         assert self._dk(items[2]).value == KW_NOT_EQUAL
-        return ComparisonExpr(items[0], Keyword(KW_NOT_EQUAL, self._dk(items[2]).loc), items[1])
+        return ComparisonExpr(items[0], keyword(KW_NOT_EQUAL, self._dk(items[2]).loc), items[1])
 
     def singleton_tuple_expr(self, items):
         return TupleExpr((items[0],))
@@ -1565,27 +1565,27 @@ class _DongbeiTransformer(lark.Transformer):
     # Arithmetic; items: [left_expr, KW_OP token, right_expr]
     def add_expr(self, items):
         assert self._dk(items[1]).value == KW_PLUS
-        return ArithmeticExpr(items[0], Keyword(KW_PLUS, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_PLUS, self._dk(items[1]).loc), items[2])
 
     def sub_expr(self, items):
         assert self._dk(items[1]).value == KW_MINUS
-        return ArithmeticExpr(items[0], Keyword(KW_MINUS, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_MINUS, self._dk(items[1]).loc), items[2])
 
     def mul_expr(self, items):
         assert self._dk(items[1]).value == KW_TIMES
-        return ArithmeticExpr(items[0], Keyword(KW_TIMES, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_TIMES, self._dk(items[1]).loc), items[2])
 
     def div_expr(self, items):
         assert self._dk(items[1]).value == KW_DIVIDE_BY
-        return ArithmeticExpr(items[0], Keyword(KW_DIVIDE_BY, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_DIVIDE_BY, self._dk(items[1]).loc), items[2])
 
     def idiv_expr(self, items):
         assert self._dk(items[1]).value == KW_INTEGER_DIVIDE_BY
-        return ArithmeticExpr(items[0], Keyword(KW_INTEGER_DIVIDE_BY, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_INTEGER_DIVIDE_BY, self._dk(items[1]).loc), items[2])
 
     def mod_expr(self, items):
         assert self._dk(items[1]).value == KW_MODULO
-        return ArithmeticExpr(items[0], Keyword(KW_MODULO, self._dk(items[1]).loc), items[2])
+        return ArithmeticExpr(items[0], keyword(KW_MODULO, self._dk(items[1]).loc), items[2])
 
     # Postfix / prefix
     def negate_expr(self, items):
@@ -1594,12 +1594,12 @@ class _DongbeiTransformer(lark.Transformer):
     def index1_expr(self, items):
         # items: [atom_expr, KW_INDEX_1 token]
         assert self._dk(items[1]).value == KW_INDEX_1
-        return IndexExpr(items[0], NumberLiteralExpr(1, self._dk(items[1]).loc))
+        return IndexExpr(items[0], number_literal_expr(1, self._dk(items[1]).loc))
 
     def index_last_expr(self, items):
         # items: [atom_expr, KW_INDEX_LAST token]
         assert self._dk(items[1]).value == KW_INDEX_LAST
-        return IndexExpr(items[0], NumberLiteralExpr(0, self._dk(items[1]).loc))
+        return IndexExpr(items[0], number_literal_expr(0, self._dk(items[1]).loc))
 
     def index_expr(self, items):
         return IndexExpr(items[0], items[1])
@@ -1699,7 +1699,7 @@ _dongbei_var_to_python_var = {
 }
 
 
-def GetPythonVarName(var):
+def get_python_var_name(var):
     if var in _dongbei_var_to_python_var:
         return _dongbei_var_to_python_var[var]
 
@@ -1739,109 +1739,109 @@ def GetPythonVarName(var):
 #                Expr，ExprList
 
 # Not meant to be in DongbeiParser.
-def ParseExprFromStr(str):
+def parse_expr_from_str(str):
     parser = DongbeiParser()
-    tokens = parser.Tokenize(str, None)
+    tokens = parser.tokenize(str, None)
     tree = _lark_parser.parse(tokens, start="start_expr")
     return _lark_transformer.transform(tree)
 
 
 # Not meant to be in DongbeiParser.
-def ParseStmtFromStr(str):
+def parse_stmt_from_str(str):
     parser = DongbeiParser()
-    tokens = parser.Tokenize(str, None)
+    tokens = parser.tokenize(str, None)
     tree = _lark_parser.parse(tokens, start="start_stmt")
     return _lark_transformer.transform(tree)
 
 
-def TranslateStatementToPython(stmt, indent=""):
+def translate_statement_to_python(stmt, indent=""):
     """Translates the statements to Python code, without trailing newline."""
 
     if stmt.kind == STMT_VAR_DECL:
         var_token = stmt.value
-        var = GetPythonVarName(var_token.value)
+        var = get_python_var_name(var_token.value)
         return indent + "%s = None" % (var,)
 
     if stmt.kind == STMT_LIST_VAR_DECL:
         var_token = stmt.value
-        var = GetPythonVarName(var_token.value)
+        var = get_python_var_name(var_token.value)
         return indent + "%s = []" % (var,)
 
     if stmt.kind == STMT_ASSIGN:
         var_expr, expr = stmt.value
-        var = var_expr.ToPython()
-        return indent + "%s = %s" % (var, expr.ToPython())
+        var = var_expr.to_python()
+        return indent + "%s = %s" % (var, expr.to_python())
 
     if stmt.kind == STMT_APPEND:
         var_expr, expr = stmt.value
-        var = var_expr.ToPython()
-        return indent + "(%s).append(%s)" % (var, expr.ToPython())
+        var = var_expr.to_python()
+        return indent + "(%s).append(%s)" % (var, expr.to_python())
 
     if stmt.kind == STMT_EXTEND:
         var_expr, expr = stmt.value
-        var = var_expr.ToPython()
-        return indent + "(%s).extend(%s)" % (var, expr.ToPython())
+        var = var_expr.to_python()
+        return indent + "(%s).extend(%s)" % (var, expr.to_python())
 
     if stmt.kind == STMT_SAY:
         expr = stmt.value
-        return indent + "_dongbei_print(%s)" % (expr.ToPython(),)
+        return indent + "_dongbei_print(%s)" % (expr.to_python(),)
 
     if stmt.kind == STMT_YIELD:
         expr = stmt.value
-        return indent + f"yield ({expr.ToPython()})"
+        return indent + f"yield ({expr.to_python()})"
 
     if stmt.kind == STMT_INC_BY:
         var_expr, expr = stmt.value
-        var = var_expr.ToPython()
-        return indent + f"{var} += {expr.ToPython()}"
+        var = var_expr.to_python()
+        return indent + f"{var} += {expr.to_python()}"
 
     if stmt.kind == STMT_DEC_BY:
         var_expr, expr = stmt.value
-        var = var_expr.ToPython()
-        return indent + "%s -= %s" % (var, expr.ToPython())
+        var = var_expr.to_python()
+        return indent + "%s -= %s" % (var, expr.to_python())
 
     if stmt.kind == STMT_LOOP:
         var_expr, from_val, to_val, step_expr, stmts = stmt.value
-        var = var_expr.ToPython()
+        var = var_expr.to_python()
         loop = indent + "for %s in range(%s, (%s) + 1, %s):" % (
             var,
-            from_val.ToPython(),
-            to_val.ToPython(),
-            step_expr.ToPython(),
+            from_val.to_python(),
+            to_val.to_python(),
+            step_expr.to_python(),
         )
         for s in stmts:
-            loop += "\n" + TranslateStatementToPython(s, indent + "  ")
+            loop += "\n" + translate_statement_to_python(s, indent + "  ")
         if not stmts:
             loop += "\n" + indent + "  pass"
         return loop
 
     if stmt.kind == STMT_RANGE_LOOP:
         var_expr, range_expr, stmts = stmt.value
-        var = var_expr.ToPython()
-        loop = indent + "for %s in %s:" % (var, range_expr.ToPython())
+        var = var_expr.to_python()
+        loop = indent + "for %s in %s:" % (var, range_expr.to_python())
         for s in stmts:
-            loop += "\n" + TranslateStatementToPython(s, indent + "  ")
+            loop += "\n" + translate_statement_to_python(s, indent + "  ")
         if not stmts:
             loop += "\n" + indent + "  pass"
         return loop
 
     if stmt.kind == STMT_INFINITE_LOOP:
         var_expr, stmts = stmt.value
-        var = var_expr.ToPython()
+        var = var_expr.to_python()
         loop = indent + "for %s in _dongbei_1_infinite_loop():" % (var,)
         for s in stmts:
-            loop += "\n" + TranslateStatementToPython(s, indent + "  ")
+            loop += "\n" + translate_statement_to_python(s, indent + "  ")
         if not stmts:
             loop += "\n" + indent + "  pass"
         return loop
 
     if stmt.kind == STMT_FUNC_DEF:
         func_token, params, stmts = stmt.value
-        func_name = GetPythonVarName(func_token.value)
-        param_names = map(lambda tk: GetPythonVarName(tk.value), params)
+        func_name = get_python_var_name(func_token.value)
+        param_names = map(lambda tk: get_python_var_name(tk.value), params)
         code = indent + "def %s(%s):" % (func_name, ", ".join(param_names))
         for s in stmts:
-            code += "\n" + TranslateStatementToPython(s, indent + "  ")
+            code += "\n" + translate_statement_to_python(s, indent + "  ")
         if not stmts:
             code += "\n" + indent + "  pass"
         return code
@@ -1849,40 +1849,40 @@ def TranslateStatementToPython(stmt, indent=""):
     if stmt.kind == STMT_CALL:
         func = stmt.value.func
         args = stmt.value.args
-        func_name = GetPythonVarName(func)
+        func_name = get_python_var_name(func)
         code = indent + "%s(%s)" % (
             func_name,
-            ", ".join(arg.ToPython() for arg in args),
+            ", ".join(arg.to_python() for arg in args),
         )
         return code
 
     if stmt.kind == STMT_RETURN:
-        return indent + "return " + stmt.value.ToPython()
+        return indent + "return " + stmt.value.to_python()
 
     if stmt.kind == STMT_COMPOUND:
         code = indent + "if True:"
         stmts = stmt.value
         if stmts:
             for s in stmts:
-                code += "\n" + TranslateStatementToPython(s, indent + "  ")
+                code += "\n" + translate_statement_to_python(s, indent + "  ")
         else:
             code += "\n" + indent + "  pass"
         return code
 
     if stmt.kind == STMT_CONDITIONAL:
         condition, then_stmt, else_stmt = stmt.value
-        code = indent + "if %s:\n" % (condition.ToPython(),)
-        code += TranslateStatementToPython(then_stmt, indent + "  ")
+        code = indent + "if %s:\n" % (condition.to_python(),)
+        code += translate_statement_to_python(then_stmt, indent + "  ")
         if else_stmt:
             code += "\n" + indent + "else:\n"
-            code += TranslateStatementToPython(else_stmt, indent + "  ")
+            code += translate_statement_to_python(else_stmt, indent + "  ")
         return code
 
     if stmt.kind == STMT_SET_NONE:
-        return indent + stmt.value.ToPython() + " = None"
+        return indent + stmt.value.to_python() + " = None"
 
     if stmt.kind == STMT_DEL:
-        return indent + "del " + stmt.value.ToPython()
+        return indent + "del " + stmt.value.to_python()
 
     if stmt.kind == STMT_IMPORT:
         return indent + f"import {stmt.value.value}"
@@ -1896,41 +1896,41 @@ def TranslateStatementToPython(stmt, indent=""):
     if stmt.kind == STMT_ASSERT:
         return (
             indent
-            + f'assert {stmt.value.ToPython()}, "该着 {stmt.value.ToDongbei()}，咋有毛病了咧？"'
+            + f'assert {stmt.value.to_python()}, "该着 {stmt.value.to_dongbei()}，咋有毛病了咧？"'
         )
 
     if stmt.kind == STMT_ASSERT_FALSE:
         return (
             indent
-            + f'assert not ({stmt.value.ToPython()}), "{stmt.value.ToDongbei()} 不应该啊，咋有毛病了咧？"'
+            + f'assert not ({stmt.value.to_python()}), "{stmt.value.to_dongbei()} 不应该啊，咋有毛病了咧？"'
         )
 
     if stmt.kind == STMT_RAISE:
-        return indent + f"raise _Dongbei_Error({stmt.value.ToPython()})"
+        return indent + f"raise _Dongbei_Error({stmt.value.to_python()})"
 
     if stmt.kind == STMT_CLASS_DEF:
         subclass, baseclass, methods = stmt.value
         baseclass_decl = ""
         if baseclass.value != "无产":
-            baseclass_decl = "(" + GetPythonVarName(baseclass.value) + ")"
-        code = indent + f"class {GetPythonVarName(subclass.value)}{baseclass_decl}:\n"
+            baseclass_decl = "(" + get_python_var_name(baseclass.value) + ")"
+        code = indent + f"class {get_python_var_name(subclass.value)}{baseclass_decl}:\n"
         if not methods:
             return code + indent + "  pass"
         for method in methods:
-            code += "\n" + TranslateStatementToPython(method, indent + "  ")
+            code += "\n" + translate_statement_to_python(method, indent + "  ")
         return code
 
     if stmt.kind == STMT_EXPR:
-        return indent + stmt.value.ToPython()
+        return indent + stmt.value.to_python()
 
     raise Exception("俺不懂 %s 语句咋执行。" % (stmt.kind))
 
 
 # Not meant to be in DongbeiParser.
-def ParseToStatements(code):
+def parse_to_statements(code):
     parser = DongbeiParser()
-    tokens = parser.Tokenize(code, None)
-    return parser.TranslateTokensToStatements(tokens)
+    tokens = parser.tokenize(code, None)
+    return parser.translate_tokens_to_statements(tokens)
 
 
 _dongbei_output = ""
@@ -1952,14 +1952,14 @@ def _dongbei_1_infinite_loop():
         yield 1
 
 
-def TranslateDongbeiToPython(code: str, src_file: str, xudao: bool = False) -> str:
+def translate_dongbei_to_python(code: str, src_file: str, xudao: bool = False) -> str:
     parser = DongbeiParser()
-    tokens = parser.Tokenize(code, src_file)
-    statements = parser.TranslateTokensToStatements(tokens)
+    tokens = parser.tokenize(code, src_file)
+    statements = parser.translate_tokens_to_statements(tokens)
 
     py_code_lines = []
     for s in statements:
-        py_code_lines.append(TranslateStatementToPython(s))
+        py_code_lines.append(translate_statement_to_python(s))
     py_code = "\n".join(py_code_lines)
     if xudao:
         print("Python 代码：")
@@ -1968,7 +1968,7 @@ def TranslateDongbeiToPython(code: str, src_file: str, xudao: bool = False) -> s
     return py_code
 
 
-def RunPyCode(py_code: str) -> str:
+def run_py_code(py_code: str) -> str:
     """Runs the given python code.
 
     Args:
@@ -1989,7 +1989,7 @@ def RunPyCode(py_code: str) -> str:
     return _dongbei_output
 
 
-def TranslateAndRun(dongbei_code: str, src_file: str, xudao: bool = False) -> str:
+def translate_and_run(dongbei_code: str, src_file: str, xudao: bool = False) -> str:
     """Translates the given dongbei code to python and runs it.
 
     Args:
@@ -2001,8 +2001,8 @@ def TranslateAndRun(dongbei_code: str, src_file: str, xudao: bool = False) -> st
         the output of the dongbei code
     """
 
-    py_code = TranslateDongbeiToPython(dongbei_code, src_file=src_file, xudao=xudao)
-    return RunPyCode(py_code)
+    py_code = translate_dongbei_to_python(dongbei_code, src_file=src_file, xudao=xudao)
+    return run_py_code(py_code)
 
 
 def get_input(prompt: str) -> str:
@@ -2033,10 +2033,10 @@ def repl():
             break
 
         try:
-            py_code = TranslateDongbeiToPython(dongbei_code, src_file="你瞅那动静")
+            py_code = translate_dongbei_to_python(dongbei_code, src_file="你瞅那动静")
         except Exception as e1:
             try:
-                py_code = TranslateDongbeiToPython(
+                py_code = translate_dongbei_to_python(
                     f"嘀咕：{dongbei_code}。", src_file="你瞅那玩意儿"
                 )
             except Exception as e2:
@@ -2051,7 +2051,7 @@ def repl():
                 print(e2)
 
         try:
-            yield RunPyCode(py_code)
+            yield run_py_code(py_code)
         except Exception as e:
             print(e)
 
@@ -2104,7 +2104,7 @@ def dongbei_cli(argv):
         if FLAGS.xudao:
             print(f"执行 {program} ...")
         try:
-            TranslateAndRun(src_file.read(), src_file=program, xudao=FLAGS.xudao)
+            translate_and_run(src_file.read(), src_file=program, xudao=FLAGS.xudao)
         except Exception as e:
             print(e)
 
