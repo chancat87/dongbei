@@ -24,7 +24,10 @@ src/dongbei.py --xudao <文件>.dongbei
 # 启动交互式 REPL
 src/dongbei.py
 
-# 跑全部测试
+# 跑全部测试（单元测试 + 所有 demo）
+bash test/test_all
+
+# 只跑单元测试
 python3 -m unittest test/dongbei_test
 
 # 跑单个测试类或测试方法
