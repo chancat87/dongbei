@@ -217,7 +217,7 @@ $ dongbei --bihua 斐波那契
 没事跑跑
 
 ```{shell}
-test/dongbei_test.py
+test/test_all
 ```
 
 身体更健康。
