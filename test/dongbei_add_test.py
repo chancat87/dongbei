@@ -11,6 +11,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from src.dongbei import *
+from src.dongbei import _dongbei_add
 
 
 class TestDongbeiSpecialAddition(unittest.TestCase):
@@ -22,19 +23,19 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
         self.assertEqual(_dongbei_add(1, 2), 3)
         self.assertEqual(_dongbei_add(10, -5), 5)
         self.assertEqual(_dongbei_add(1.5, 2.5), 4.0)
-        
+
         # 测试字符串加字符串
         self.assertEqual(_dongbei_add("a", "b"), "ab")
         self.assertEqual(_dongbei_add("东北", "话"), "东北话")
-        
+
         # 测试字符串加数字
         self.assertEqual(_dongbei_add("a", 1), "a1")
         self.assertEqual(_dongbei_add("数字:", 42), "数字:42")
-        
+
         # 测试数字加字符串
         self.assertEqual(_dongbei_add(1, "a"), "1a")
         self.assertEqual(_dongbei_add(3.14, "是圆周率"), "3.14是圆周率")
-        
+
         # 测试混合类型
         self.assertEqual(_dongbei_add("结果:", 100), "结果:100")
         self.assertEqual(_dongbei_add(100, "分"), "100分")
@@ -44,13 +45,13 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
         # 测试布尔值
         self.assertEqual(_dongbei_add("布尔:", True), "布尔:True")
         self.assertEqual(_dongbei_add(False, "是假"), "False是假")
-        
+
         # 测试None
         self.assertEqual(_dongbei_add("空值:", None), "空值:None")
-        
+
         # 测试列表
         self.assertEqual(_dongbei_add("列表:", [1, 2]), "列表:[1, 2]")
-        
+
         # 测试零和空字符串
         self.assertEqual(_dongbei_add(0, "零"), "0零")
         self.assertEqual(_dongbei_add("", "空"), "空")
@@ -58,44 +59,43 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
 
     def test_string_number_concatenation_in_expressions(self):
         """测试表达式中的字符串-数字拼接"""
+        OQ = KW_OPEN_QUOTE
+        CQ = KW_CLOSE_QUOTE
+
         # 测试基本的字符串和数字加法
-        code = """
-唠唠："结果："加42。
-"""
+        code = f'唠唠：{OQ}结果：{CQ}加42。'
         output = TranslateAndRun(code, "test_string_number_concat")
-        self.assertIn("结果:42", output)
-        
+        self.assertIn("结果：42", output)
+
         # 测试数字和字符串加法
-        code = """
-唠唠：100加"分"。
-"""
+        code = f'唠唠：100加{OQ}分{CQ}。'
         output = TranslateAndRun(code, "test_number_string_concat")
         self.assertIn("100分", output)
-        
+
         # 测试多个拼接
-        code = """
-唠唠："第"加1加"名"。
-"""
+        code = f'唠唠：{OQ}第{CQ}加1加{OQ}名{CQ}。'
         output = TranslateAndRun(code, "test_multiple_concat")
         self.assertIn("第1名", output)
 
     def test_real_world_scenario(self):
         """测试真实场景：老王搬东西的例子"""
-        code = """
-老王是活雷锋。
-老王装"a"。
-老王加13。
-老王加" 牛逼"。
-唠唠：老王。
-"""
+        OQ = KW_OPEN_QUOTE
+        CQ = KW_CLOSE_QUOTE
+        code = (
+            f'老王是活雷锋。\n'
+            f'老王装{OQ}a{CQ}。\n'
+            f'老王装老王加13。\n'
+            f'老王装老王加{OQ} 牛逼{CQ}。\n'
+            f'唠唠：老王。'
+        )
         output = TranslateAndRun(code, "test_real_world")
         self.assertIn("a13 牛逼", output)
 
     def test_arithmetic_operation_mapping(self):
         """测试算术运算映射是否正确"""
-        # 确保加法映射到我们的自定义函数
-        self.assertEqual(ARITHMETIC_OPERATION_TO_PYTHON[KW_PLUS], "_dongbei_add")
-        
+        # 加法由 ArithmeticExpr.ToPython() 特殊处理，不在 ARITHMETIC_OPERATION_TO_PYTHON 里
+        self.assertNotIn(KW_PLUS, ARITHMETIC_OPERATION_TO_PYTHON)
+
         # 确保其他运算不受影响
         self.assertEqual(ARITHMETIC_OPERATION_TO_PYTHON[KW_MINUS], "-")
         self.assertEqual(ARITHMETIC_OPERATION_TO_PYTHON[KW_TIMES], "*")
@@ -109,36 +109,40 @@ class TestDongbeiSpecialAddition(unittest.TestCase):
             Keyword(KW_PLUS, None),
             LiteralExpr(Token(TK_NUMBER_LITERAL, 1, None))
         )
-        
+
         python_code = expr.ToPython()
         self.assertEqual(python_code, '_dongbei_add("a", 1)')
-        
+
         # 测试其他运算不受影响
         expr = ArithmeticExpr(
             LiteralExpr(Token(TK_NUMBER_LITERAL, 5, None)),
             Keyword(KW_MINUS, None),
             LiteralExpr(Token(TK_NUMBER_LITERAL, 3, None))
         )
-        
+
         python_code = expr.ToPython()
         self.assertEqual(python_code, "5 - 3")
 
     def test_complex_concatenation_scenarios(self):
         """测试复杂拼接场景"""
+        OQ = KW_OPEN_QUOTE
+        CQ = KW_CLOSE_QUOTE
+
         # 测试多个不同类型拼接
-        code = """
-【结果】装"分数："加95加"分，等级："加"A"。
-唠唠：【结果】。
-"""
+        code = (
+            f'【结果】是活雷锋。\n'
+            f'【结果】装{OQ}分数：{CQ}加95加{OQ}分，等级：{CQ}加{OQ}A{CQ}。\n'
+            f'唠唠：【结果】。'
+        )
         output = TranslateAndRun(code, "test_complex_concat")
-        self.assertIn("分数:95分，等级:A", output)
-        
+        self.assertIn("分数：95分，等级：A", output)
+
         # 测试在循环中的拼接
-        code = """
-从1到3磨叽：
-    唠唠："第"加【i】加"次循环"。
-磨叽完了。
-"""
+        code = (
+            f'老二从1到3磨叽：\n'
+            f'    唠唠：{OQ}第{CQ}加老二加{OQ}次循环{CQ}。\n'
+            f'磨叽完了。'
+        )
         output = TranslateAndRun(code, "test_loop_concat")
         self.assertIn("第1次循环", output)
         self.assertIn("第2次循环", output)
