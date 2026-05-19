@@ -273,6 +273,7 @@ dongbei hello-world.dongbei
 
 dongbei 欢迎大伙儿帮衬。
 要是您有意相助，请看 [dongbei 开发人间指南](DEVELOPE.md)。
+想搞清楚代码咋写的，请看 [dongbei 代码导读](doc/CONTRIBUTING_WALKTHROUGH.md)——手把手带你把解释器从里到外整明白。
 
 ## 周边
 
