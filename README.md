@@ -8,7 +8,7 @@ dongbei 语言永久域名：http://dongbei-lang.org/
 
 #### 体格咋地
 
-[![体格咋地](https://github.com/zhanyong-wan/dongbei/actions/workflows/ci.yml/badge.svg)](https://github.com/zhanyong-wan/dongbei/actions/workflows/ci.yml)
+[![体格](https://github.com/zhanyong-wan/dongbei/actions/workflows/ci.yml/badge.svg)](https://github.com/zhanyong-wan/dongbei/actions/workflows/ci.yml)
 
 扫码关注原作者微信公众号“老万故事会”：
 
